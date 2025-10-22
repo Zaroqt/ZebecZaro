@@ -72,7 +72,7 @@ header {
     border-radius: var(--border-radius-main);
     padding: 8px 12px;
     font-size: 0.9rem;
-    cursor: pointer; /* နှိပ်နိုင်ကြောင်း ပြသရန် */
+    cursor: pointer; 
 }
 
 #volume-toggle {
@@ -91,6 +91,33 @@ header {
     font-size: 1.2rem;
     border-radius: 50%;
     transition: background-color 0.2s;
+}
+
+.filter-tabs {
+    display: flex;
+    justify-content: space-around;
+    padding: 0 var(--spacing-unit);
+    margin-top: 10px;
+    gap: 8px;
+}
+
+.filter-tab {
+    flex-grow: 1;
+    background-color: var(--tg-theme-secondary-bg-color);
+    color: var(--tg-theme-hint-color);
+    border: none;
+    padding: 8px 15px;
+    border-radius: var(--border-radius-main);
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+    white-space: nowrap;
+}
+
+.filter-tab.active {
+    background-color: var(--tg-theme-link-color);
+    color: var(--tg-theme-button-text-color);
+    box-shadow: 0 2px 5px rgba(32, 178, 170, 0.5);
 }
 
 /* Bottom Navigation */
@@ -115,6 +142,15 @@ header {
     color: var(--tg-theme-hint-color);
     cursor: pointer;
     transition: color 0.2s;
+}
+
+.nav-item i {
+    font-size: 1.3rem;
+}
+
+.nav-item span {
+    font-size: 0.7rem;
+    margin-top: 2px;
 }
 
 .nav-item.active {
@@ -143,7 +179,18 @@ header {
     display: block;
 }
 
-/* Post Card Styles... (unchanged) */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Post List */
+.posts-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-unit);
+}
+
 .post-card {
     background-color: var(--tg-theme-secondary-bg-color);
     padding: var(--spacing-unit);
@@ -151,8 +198,123 @@ header {
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
 
+.post-card .admin-badge {
+    display: inline-block;
+    background-color: var(--tg-theme-link-color); 
+    color: var(--tg-theme-button-text-color);
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.post-content {
+    font-size: 1.1rem;
+    line-height: 1.5;
+    margin-bottom: 12px;
+    white-space: pre-wrap; 
+}
+
+.post-actions {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 15px;
+}
+
 .like-btn, .delete-btn {
-    /* ... (unchanged) */
+    background: none;
+    border: 1px solid var(--tg-theme-hint-color);
+    color: var(--tg-theme-hint-color);
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.like-btn.liked {
+    background-color: var(--tg-theme-link-color);
+    border-color: var(--tg-theme-link-color);
+    color: var(--tg-theme-button-text-color);
+}
+
+.delete-btn {
+    border-color: var(--tg-theme-destructive-text-color);
+    color: var(--tg-theme-destructive-text-color);
+}
+
+/* Profile Card */
+.profile-card {
+    background-color: var(--tg-theme-secondary-bg-color);
+    padding: var(--spacing-unit);
+    border-radius: var(--border-radius-main);
+    text-align: center;
+    margin-top: 40px;
+}
+
+.avatar-placeholder {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: #555;
+    margin: -40px auto 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: bold;
+    color: white;
+    overflow: hidden;
+    box-shadow: 0 0 0 4px var(--tg-theme-bg-color), 0 0 0 5px var(--tg-theme-secondary-bg-color);
+}
+
+.profile-card h2 {
+    margin-bottom: 5px;
+    color: var(--tg-theme-text-color);
+}
+
+.hint-text {
+    color: var(--tg-theme-hint-color);
+    font-size: 0.9rem;
+    margin-bottom: 15px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--tg-theme-bg-color);
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-top: 15px;
+}
+
+.copy-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#telegram-chat-id {
+    font-family: monospace;
+    color: var(--tg-theme-link-color);
+}
+
+.close-app-btn {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--tg-theme-destructive-text-color);
+    color: var(--tg-theme-button-text-color);
+    border: none;
+    border-radius: 8px;
+    margin-top: 20px;
+    cursor: pointer;
+    font-weight: bold;
 }
 
 
@@ -176,6 +338,10 @@ header {
     transition: transform 0.3s;
 }
 
+.fab:active {
+    transform: scale(0.95);
+}
+
 /* -------------------------------------- */
 /* 6. Modals & Toast (Critical Z-Index Fix) */
 /* -------------------------------------- */
@@ -190,8 +356,7 @@ header {
     justify-content: center;
     align-items: center;
     z-index: 1000; /* အမြင့်ဆုံး Z-Index */
-    /* 🚨 Fix: Modal မပိတ်ခင် နောက်ခံကို နှိပ်လို့မရအောင် */
-    pointer-events: none; 
+    pointer-events: none; /* Modal မဖွင့်ခင် နောက်ခံကို နှိပ်လို့မရအောင် */
 }
 
 .modal-overlay.active {
@@ -209,6 +374,86 @@ header {
     transition: transform 0.4s ease-out, opacity 0.4s ease-out;
 }
 
+.modal-overlay.active .modal-content {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.modal-content h3 {
+    margin-bottom: 15px;
+    color: var(--tg-theme-link-color);
+}
+
+textarea, input[type="url"] {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+    resize: vertical;
+    font-size: 1rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.modal-actions .full-width {
+    width: 100%;
+    justify-content: center;
+}
+
+.modal-cancel-btn, .modal-submit-btn {
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    border: none;
+    transition: opacity 0.2s;
+}
+
+.modal-cancel-btn {
+    background: none;
+    color: var(--tg-theme-hint-color);
+}
+
+.modal-submit-btn {
+    background-color: var(--tg-theme-button-color); 
+    color: var(--tg-theme-button-text-color);
+}
+
+.music-option-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.music-option {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background-color: var(--tg-theme-bg-color);
+    border-radius: 8px;
+    color: var(--tg-theme-text-color);
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border: 1px solid var(--tg-theme-bg-color);
+}
+
+.music-option:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.music-option i {
+    margin-right: 10px;
+    color: var(--tg-theme-link-color);
+}
+
 /* Toast Notification z-index */
 .custom-toast {
     visibility: hidden;
@@ -219,7 +464,7 @@ header {
     border-radius: var(--border-radius-main);
     padding: 12px;
     position: fixed;
-    z-index: 1001; /* Modal ထက် အနည်းငယ် ပိုမြင့်ရမည် */
+    z-index: 1001; 
     left: 50%;
     transform: translateX(-50%);
     bottom: 80px; 
@@ -227,3 +472,10 @@ header {
     transition: opacity 0.3s, bottom 0.3s;
     opacity: 0;
 }
+
+.custom-toast.show {
+    visibility: visible;
+    opacity: 1;
+    bottom: 100px;
+    }
+    

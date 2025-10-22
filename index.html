@@ -8,6 +8,29 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <head>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <script>
+        // *** REPLACE THE CONFIG BELOW WITH YOUR ACTUAL FIREBASE CONFIG ***
+        const firebaseConfig = {
+            apiKey: "AIzaSyDpuDVZXdT6CZ6MlgRAd8bbVYtuIVevzlI", // <-- ဒါကို သင့်ရဲ့ API Key နဲ့ အစားထိုးပါ
+            authDomain: "zaroqt101.firebaseapp.com",
+            projectId: "zaroqt101", // <-- ဒါကို သင့်ရဲ့ Project ID နဲ့ အစားထိုးပါ
+            storageBucket: "zaroqt101.firebasestorage.app",
+            messagingSenderId: "141083314351",
+            appId: "1:141083314351:web:e7f7ce068c0c2c34a7ec5a"
+        };
+
+        // Initialize Firebase
+        const firebaseApp = firebase.initializeApp(firebaseConfig);
+        const db = firebaseApp.firestore();
+        console.log("Firebase and Firestore Initialized.");
+    </script>
+    
+    </head>
+<script src="tma-script.js"></script> 
     
 </head>
 <body>

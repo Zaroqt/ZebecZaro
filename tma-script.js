@@ -1,13 +1,12 @@
 // *****************************************************************
 // ZZ Feed - Telegram Mini App Script (Full Fix & New UI Colour - Firestore Version)
-// Post များကို Firestore တွင် သိမ်းဆည်းပြီး၊ UI အရောင်များကို ပြောင်းလဲထားပါသည်။
+// ERROR များကို ပြင်ဆင်ပြီး UI Structure ကို ပိုမို ခိုင်မာအောင် လုပ်ထားသည်
 // *****************************************************************
 
-// ********** SET YOUR ADMIN CHAT ID(s) HERE ********** // Admin ID များကို ထည့်သွင်းပါ။ ဤ ID များသာ Post တင်ခြင်း/ဖျက်ခြင်း ပြုလုပ်နိုင်မည်။
-const ADMIN_CHAT_IDS = [ 
-    1924452453, // Admin 1 ID
-    6440295843, // Admin 2 ID
-    6513916873, // Admin 3 ID
+// ********** SET YOUR ADMIN CHAT ID(s) HERE ********** const ADMIN_CHAT_IDS = [ 
+    1924452453, 
+    6440295843, 
+    6513916873, 
     // Add additional Admin IDs here:
 ]; 
 // *************************************************
@@ -16,6 +15,7 @@ const ADMIN_CHAT_IDS = [
 const POSTS_COLLECTION = 'tma_zzfeed_posts'; 
 const LIKES_COLLECTION = 'tma_zzfeed_likes'; 
 const TEMP_MUSIC_KEY = 'tma_temp_music_url_v5';
+// Music Link ကို အလုပ်လုပ်သော Link တစ်ခုဖြင့် ပြန်လည် အတည်ပြုထားသည်
 const INITIAL_DEFAULT_URL = 'https://archive.org/download/lofi-chill-1-20/lofi_chill_03_-_sleepwalker.mp3'; 
 
 let audioPlayer;
@@ -28,13 +28,12 @@ let is_admin = false;
 let currentPostFilter = 'new-posts'; 
 let isMusicMuted = false; 
 let tg = null;
-let unsubscribeFromPosts = null; // Firestore real-time listener
+let unsubscribeFromPosts = null; 
 
 // ===========================================
 //          HELPER FUNCTIONS
 // ===========================================
 
-/** Generates a consistent, bright color for user initials. */
 function stringToColor(str) { 
     let hash = 0; for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
     let color = '#';
@@ -46,7 +45,6 @@ function stringToColor(str) {
     return color;
 }
 
-/** Displays a temporary notification message at the bottom. */
 function showToast(message) { 
     const toast = document.getElementById('custom-toast');
     if (!toast) return;
@@ -59,7 +57,6 @@ function showToast(message) {
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
 }
 
-/** Copies text to the clipboard. (Legacy fallback included) */
 function copyToClipboard(text, successMsg = 'Copied successfully.') { 
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => showToast(successMsg)).catch(() => performLegacyCopy(text));
@@ -93,19 +90,15 @@ function isAdminUser(userId) {
 //          DATA/STORAGE HANDLERS (Firestore)
 // ===========================================
 
-/**
- * Post များကို Realtime ဖြင့် ဆွဲယူပြီး UI ကို Update လုပ်သည်။
- */
 function loadPostsRealtime(userId) { 
-    // window.db ကို index.html မှာ စစ်ဆေးပြီး ထည့်သွင်းထားသည်
     if (!window.db) {
         const container = document.getElementById('posts-container');
-        if(container) container.innerHTML = '<p class="initial-loading-text" style="color:red;">❌ Database Not Initialized. Check index.html config.</p>';
+        if(container) container.innerHTML = '<p class="initial-loading-text" style="color:var(--tg-theme-destructive-text-color);">❌ Database Not Initialized. Check index.html config.</p>';
         return;
     }
 
     if (unsubscribeFromPosts) {
-        unsubscribeFromPosts(); // ယခင် listener ကို ဖြုတ်ပါ
+        unsubscribeFromPosts(); 
     }
 
     const container = document.getElementById('posts-container');
@@ -114,12 +107,10 @@ function loadPostsRealtime(userId) {
 
     let query = window.db.collection(POSTS_COLLECTION);
     
-    // Sorting (Newest/Oldest)
     const sortField = 'timestamp';
     const sortDirection = currentPostFilter === 'new-posts' ? 'desc' : 'asc';
     query = query.orderBy(sortField, sortDirection);
 
-    // Realtime Listener
     unsubscribeFromPosts = query.onSnapshot(async (snapshot) => {
         const posts = snapshot.docs.map(doc => ({
             id: doc.id,
@@ -131,11 +122,10 @@ function loadPostsRealtime(userId) {
         if (posts.length === 0) {
             container.innerHTML = '<p class="initial-loading-text">No posts found yet. Be the first to post!</p>';
         } else {
-             // Promise.all ကိုသုံး၍ Post element တွေ အားလုံးကို ဖန်တီးပါ
             const postElements = await Promise.all(posts.map(post => createPostElement(post, userId)));
             postElements.forEach(el => container.appendChild(el));
         }
-        addPostEventListeners(userId); // Listener ပြီးမှ Event listener တွေ ပြန်ထည့်ပါ
+        addPostEventListeners(userId); 
     }, error => {
         console.error("Error listening to posts:", error);
         container.innerHTML = '<p class="initial-loading-text" style="color:var(--tg-theme-destructive-text-color);">❌ Failed to load posts from server.</p>';
@@ -143,10 +133,6 @@ function loadPostsRealtime(userId) {
     });
 }
 
-
-/**
- * Firestore သို့ Like/Unlike အချက်အလက်များကို ရေးသွင်းသည်။
- */
 async function toggleLike(e, userId) { 
     if (!window.db) { showToast("Database not ready."); return; }
 
@@ -156,18 +142,15 @@ async function toggleLike(e, userId) {
     
     try {
         const doc = await likeDocRef.get();
-        
         let change = 0;
         let isLikedNow = false;
 
         if (doc.exists) {
-            // Unliking
             await likeDocRef.delete();
             change = -1;
             isLikedNow = false;
             showToast("Unliked.");
         } else {
-            // Liking
             await likeDocRef.set({
                 postId: postId,
                 userId: userId,
@@ -178,7 +161,6 @@ async function toggleLike(e, userId) {
             showToast("Liked!");
         }
         
-        // UI Update (Immediate feedback)
         updateLikeCountDisplay(likeButton, change, isLikedNow);
 
     } catch (error) {
@@ -187,9 +169,6 @@ async function toggleLike(e, userId) {
     }
 }
 
-/**
- * Like Count ကို UI တွင် မြန်မြန်ဆန်ဆန် ပြသရန် Update လုပ်သည်။
- */
 function updateLikeCountDisplay(likeButton, change, isLikedNow) {
     const currentCountText = likeButton.textContent.replace(/[^0-9]/g, ''); 
     let currentCount = parseInt(currentCountText) || 0;
@@ -204,9 +183,6 @@ function updateLikeCountDisplay(likeButton, change, isLikedNow) {
 //          POSTS UI LOGIC 
 // ===========================================
 
-/**
- * Post တစ်ခုချင်းစီအတွက် Like count ကို Database မှ ဆွဲယူသည်။
- */
 async function getPostLikeCount(postId) {
     if (!window.db) return 0;
     try {
@@ -220,7 +196,6 @@ async function getPostLikeCount(postId) {
     }
 }
 
-/** Creates the HTML element for a single post. */
 async function createPostElement(post, userId) { 
     const postId = post.id;
     const postElement = document.createElement('div');
@@ -239,10 +214,11 @@ async function createPostElement(post, userId) {
     const deleteButton = isAdmin 
         ? `<button class="delete-btn" data-post-id="${postId}"><i class="fas fa-trash"></i> Delete</button>` 
         : '';
+        
+    const adminBadge = post.isAdmin ? '<span class="admin-badge">Admin</span>' : '';
 
-    // post.content တွင် HTML injection မဖြစ်စေရန် sanitizer ကို ထည့်ရန် လိုအပ်သည်၊ 
-    // သို့သော် လောလောဆယ်တွင် Pre-wrap သုံးပြီး Plain text အဖြစ် သတ်မှတ်ထားသည်
     postElement.innerHTML = `
+        ${adminBadge}
         <p class="post-content">${post.content}</p>
         <div class="post-actions">
             <button class="like-btn ${isLiked ? 'liked' : ''}" data-post-id="${postId}" aria-label="${isLiked ? 'Unlike' : 'Like'} Post">
@@ -255,7 +231,6 @@ async function createPostElement(post, userId) {
     return postElement;
 } 
 
-/** Permanently deletes a post (Database). */
 function performDeletePost(postId, userId) { 
     if (!isAdminUser(userId) || !window.db) {
         showToast("Only Admins can delete posts or database not ready.");
@@ -370,7 +345,7 @@ function setupAdminPostLogic(isAdmin) {
 }
 
 // ===========================================
-//          MODAL & MUSIC LOGIC 
+//          MODAL & MUSIC LOGIC (FIXED Error Handling)
 // ===========================================
 
 function openModal(modalId) { 
@@ -419,12 +394,16 @@ function toggleVolume() {
 
     if (audioPlayer.paused) {
         audioPlayer.volume = isMusicMuted ? 0 : 1;
-        audioPlayer.play().then(() => {
-            showToast(isMusicMuted ? "Music started (Muted)." : "Music started playing.");
-        }).catch(e => {
-            console.error("Failed to play on user click:", e);
-            showToast('Playback Failed. User interaction required.');
-        });
+        // Play method ကို promise နဲ့ ကိုင်တွယ်ခြင်း
+        const playPromise = audioPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                showToast(isMusicMuted ? "Music started (Muted)." : "Music started playing.");
+            }).catch(e => {
+                console.error("Failed to play on user click:", e);
+                showToast('Playback Failed. User interaction required, or check music link.');
+            });
+        }
     } else {
         isMusicMuted = !isMusicMuted;
         audioPlayer.volume = isMusicMuted ? 0 : 1;
@@ -449,11 +428,13 @@ function setupMusicPlayer() {
     audioPlayer.onplay = () => updateMusicStatus(true);
     audioPlayer.onpause = () => updateMusicStatus(false);
     
+    // ❌ Music Load Error ကို ပိုမို ထိရောက်စွာ ကိုင်တွယ်ခြင်း (Your reported error)
     audioPlayer.onerror = (e) => { 
-        console.error("Audio error:", e);
+        console.error("Audio error details:", e);
         audioPlayer.pause();
         updateMusicStatus(false);
-        showToast("Music Load Error. Playing stopped."); 
+        // showToast ကို Error message ရှင်းရှင်းလင်းလင်း ပြပါ
+        showToast("Music Load Error. Playing stopped. Check URL or try another file."); 
     };
     
     updateMusicStatus(false); 
@@ -583,6 +564,7 @@ function switchScreen(targetScreenId) {
         if (fab) fab.style.display = 'none';
     } else { // home-screen
         if (fixedHeaderArea) fixedHeaderArea.style.display = 'block';
+        // Fix: content area ရဲ့ padding top ကို ပြန်ချိန်ပါ
         if (contentArea) contentArea.style.paddingTop = `${headerHeight + 20}px`; 
         if (fab && is_admin) fab.style.display = 'flex'; 
     }
@@ -600,7 +582,6 @@ function addNavigationListeners() {
 // ===========================================
 
 function main() { 
-    // 1. Get User Info
     const user = tg.initDataUnsafe.user;
     if (user && user.id) {
         currentUserId = parseInt(user.id);
@@ -610,7 +591,6 @@ function main() {
         is_admin = isAdminUser(currentUserId);
     }
     
-    // 2. Setup Components
     addNavigationListeners();
     setupPostFilters();
     setupMusicPlayer();
@@ -618,13 +598,11 @@ function main() {
     setupProfileListeners();
     setupAdminPostLogic(is_admin);
     
-    // 3. Update UI
     updateProfileDisplay(currentUserId, currentUserName, currentUserUsername, is_admin);
     
-    // 4. Load Data
     loadPostsRealtime(currentUserId);
     
-    // 5. Final Setup
+    // Initialization တွင် home-screen ကို ပြသပါ
     switchScreen('home-screen');
     if (tg.MainButton) tg.MainButton.hide();
     tg.ready(); 
@@ -636,7 +614,6 @@ function setupTMA() {
         const themeParams = tg.themeParams;
         if (themeParams) {
             const root = document.documentElement;
-            // 🎨 New UI Colour Mapping - CSS file တွင် သတ်မှတ်ထားသော အရောင်များကို ပြန်ထည့်ပါ
             const themeMap = {
                 '--tg-theme-bg-color': themeParams.bg_color || '#0d1117',
                 '--tg-theme-secondary-bg-color': themeParams.secondary_bg_color || '#1a202c',
@@ -668,7 +645,6 @@ function setupTMA() {
             MainButton: { hide: () => console.log('MainButton: Hide') }
         };
 
-        // Fallback UI Colours for local testing
         const root = document.documentElement;
         root.style.setProperty('--tg-theme-bg-color', '#0d1117');
         root.style.setProperty('--tg-theme-text-color', '#ffffff');

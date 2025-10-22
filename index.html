@@ -1,32 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zebec Zaro</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZZ Feed | Telegram Mini App</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header>
-    <h1>Zebec Zaro</h1>
-    <p>Mini Social Feed App</p>
+    <h1>ZZ Feed</h1>
+    <p>🔥 Admin Posts for Everyone</p>
   </header>
 
-  <main id="feed">
-    <div class="tabs">
-      <button id="newest" class="active">Newest</button>
-      <button id="oldest">Oldest</button>
+  <main>
+    <div id="feedContainer" class="feed-container">
+      <p class="loading">Loading posts...</p>
     </div>
-    <div id="posts"></div>
   </main>
 
   <footer>
-    <button id="home" class="active">🏠</button>
-    <button id="add">➕</button>
-    <button id="profile">👤</button>
+    <p>Powered by ZZ Network</p>
   </footer>
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="tma-script.js"></script>
 </body>
 </html>

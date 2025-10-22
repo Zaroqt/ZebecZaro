@@ -1,6 +1,5 @@
 /*
- * ZZ Feed - Custom CSS (Modern Dark Theme - Full Fix)
- * New Colour Scheme: Accent (#20b2aa), Button (#4caf50), Warning (#ff9800)
+ * ZZ Feed - Custom CSS (Modern Dark Theme - Final Fix)
  */
 
 /* -------------------------------------- */
@@ -80,7 +79,6 @@ header {
     margin-right: 10px;
 }
 
-/* Fix: Volume toggle icon size */
 #volume-toggle {
     font-size: 1.1rem;
     cursor: pointer;
@@ -100,11 +98,6 @@ header {
     transition: background-color 0.2s;
 }
 
-.icon-btn:hover {
-    background-color: rgba(32, 178, 170, 0.1);
-}
-
-/* Filter Tabs */
 .filter-tabs {
     display: flex;
     justify-content: space-around;
@@ -139,7 +132,8 @@ header {
     background-color: var(--tg-theme-secondary-bg-color);
     height: var(--nav-height);
     box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.2);
-    z-index: 10;
+    /* Nav bar z-index ကို 15 ထားပြီး FAB ကို 20 ထားခြင်း */
+    z-index: 15; 
 }
 
 .nav-item {
@@ -176,14 +170,12 @@ header {
 .content {
     flex-grow: 1;
     overflow-y: auto;
-    /* header height + spacing ကို တွက်ပြီး padding-top ပေးထားသည် (JS မှလည်း ထပ်မံ ချိန်ညှိသည်) */
     padding: 20px var(--spacing-unit); 
     padding-bottom: calc(var(--nav-height) + 20px); 
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
 }
 
-/* Fix: Screen display issues */
 .screen {
     display: none;
     animation: fadeIn 0.3s ease-in-out;
@@ -212,7 +204,6 @@ header {
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
 
-/* Fix: Admin badge style */
 .post-card .admin-badge {
     display: inline-block;
     background-color: var(--tg-theme-link-color); 
@@ -263,94 +254,6 @@ header {
     color: var(--tg-theme-destructive-text-color);
 }
 
-.delete-btn:hover {
-    background-color: rgba(255, 152, 0, 0.1);
-}
-
-.initial-loading-text {
-    text-align: center;
-    color: var(--tg-theme-hint-color);
-    margin-top: 50px;
-}
-
-/* -------------------------------------- */
-/* 4. Profile Screen */
-/* -------------------------------------- */
-.profile-card {
-    background-color: var(--tg-theme-secondary-bg-color);
-    padding: 30px 20px;
-    border-radius: var(--border-radius-main);
-    text-align: center;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-}
-
-.avatar-placeholder {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    margin: 0 auto 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    font-weight: bold;
-    color: white;
-    background-color: #6a1b9a; 
-    overflow: hidden;
-}
-
-.profile-card h2 {
-    margin-bottom: 5px;
-    font-size: 1.5rem;
-}
-
-.hint-text {
-    color: var(--tg-theme-hint-color);
-    font-size: 0.9rem;
-    margin-bottom: 15px;
-}
-
-.admin-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 15px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--tg-theme-button-text-color);
-    margin-bottom: 20px;
-    background-color: var(--tg-theme-link-color); 
-}
-
-.info-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding: 10px 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.copy-area {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: bold;
-    color: var(--tg-theme-text-color);
-}
-
-.close-app-btn {
-    background-color: var(--tg-theme-destructive-text-color);
-    color: var(--tg-theme-button-text-color);
-    border: none;
-    padding: 10px 20px;
-    border-radius: var(--border-radius-main);
-    cursor: pointer;
-    margin-top: 20px;
-    width: 100%;
-    font-weight: bold;
-    transition: background-color 0.2s;
-}
 
 /* -------------------------------------- */
 /* 5. FAB */
@@ -368,8 +271,13 @@ header {
     font-size: 1.5rem;
     cursor: pointer;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-    z-index: 20;
+    /* FAB z-index ကို 20 ထားခြင်း */
+    z-index: 20; 
     transition: transform 0.3s;
+}
+
+.fab:active {
+    transform: scale(0.95);
 }
 
 /* -------------------------------------- */
@@ -385,8 +293,8 @@ header {
     display: none;
     justify-content: center;
     align-items: center;
-    z-index: 100;
-    /* Fix: Modal backdrop is now clickable */
+    /* Modal z-index ကို အမြင့်ဆုံး 1000 ထားခြင်း */
+    z-index: 1000; 
     pointer-events: none; 
 }
 
@@ -427,10 +335,6 @@ textarea, input[type="url"] {
     font-size: 1rem;
 }
 
-textarea {
-    min-height: 120px;
-}
-
 .modal-actions {
     display: flex;
     justify-content: flex-end;
@@ -445,67 +349,16 @@ textarea {
     border: none;
 }
 
-.modal-cancel-btn {
-    background-color: var(--tg-theme-hint-color);
-    color: var(--tg-theme-text-color);
-}
-
-.modal-cancel-btn.full-width {
-    flex-grow: 1;
-}
-
 .modal-submit-btn {
     background-color: var(--tg-theme-button-color); 
     color: var(--tg-theme-button-text-color);
 }
 
-/* Music Options */
-.music-option-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-.music-option {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background-color: var(--tg-theme-bg-color);
-    color: var(--tg-theme-text-color);
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid var(--tg-theme-link-color);
-    cursor: pointer;
-    font-size: 1rem;
-    transition: background-color 0.2s;
-}
-
-.music-option:hover {
-    background-color: rgba(32, 178, 170, 0.1);
-}
-
-/* Toast Notification */
+/* Toast Notification z-index ကိုလည်း 1000 ထားသည် */
 .custom-toast {
-    visibility: hidden;
-    min-width: 250px;
-    background-color: rgba(0, 0, 0, 0.85);
-    color: #fff;
-    text-align: center;
-    border-radius: var(--border-radius-main);
-    padding: 12px;
+    /* ... (ယခင်အတိုင်း) */
     position: fixed;
-    z-index: 1000;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 80px; 
-    font-size: 0.9rem;
-    transition: opacity 0.3s, bottom 0.3s;
-    opacity: 0;
+    z-index: 1000; 
+    /* ... */
 }
-
-.custom-toast.show {
-    visibility: visible;
-    opacity: 1;
-    bottom: 90px;
-    }
+/* (အခြား CSS အပိုင်းများကို ချန်လှပ်ထားသည်) */

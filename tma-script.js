@@ -1,24 +1,21 @@
 // *****************************************************************
-// ZZ Feed - Telegram Mini App Script (Database / Shared Version)
-// Local Storage မှ Firebase Firestore သို့ ပြောင်းလဲထားသော Logic
+// ZZ Feed - Telegram Mini App Script (Full Fix & New UI Colour - Firestore Version)
+// Post များကို Firestore တွင် သိမ်းဆည်းပြီး၊ UI အရောင်များကို ပြောင်းလဲထားပါသည်။
 // *****************************************************************
 
-// ********** SET YOUR ADMIN CHAT ID(s) HERE ********** const ADMIN_CHAT_IDS = [ 
-    1924452453, 
-    6440295843, 
-    6513916873, 
+// ********** SET YOUR ADMIN CHAT ID(s) HERE ********** // Admin ID များကို ထည့်သွင်းပါ။ ဤ ID များသာ Post တင်ခြင်း/ဖျက်ခြင်း ပြုလုပ်နိုင်မည်။
+const ADMIN_CHAT_IDS = [ 
+    1924452453, // Admin 1 ID
+    6440295843, // Admin 2 ID
+    6513916873, // Admin 3 ID
     // Add additional Admin IDs here:
 ]; 
 // *************************************************
 
 // --- Global Variables & Constants ---
-// Local Storage Keys (Music အတွက်သာ)
-const TEMP_MUSIC_KEY = 'tma_temp_music_url_v5';
-
-// Database Collection Names
 const POSTS_COLLECTION = 'tma_zzfeed_posts'; 
 const LIKES_COLLECTION = 'tma_zzfeed_likes'; 
-
+const TEMP_MUSIC_KEY = 'tma_temp_music_url_v5';
 const INITIAL_DEFAULT_URL = 'https://archive.org/download/lofi-chill-1-20/lofi_chill_03_-_sleepwalker.mp3'; 
 
 let audioPlayer;
@@ -62,7 +59,7 @@ function showToast(message) {
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
 }
 
-/** Copies text to the clipboard. */
+/** Copies text to the clipboard. (Legacy fallback included) */
 function copyToClipboard(text, successMsg = 'Copied successfully.') { 
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => showToast(successMsg)).catch(() => performLegacyCopy(text));
@@ -100,43 +97,45 @@ function isAdminUser(userId) {
  * Post များကို Realtime ဖြင့် ဆွဲယူပြီး UI ကို Update လုပ်သည်။
  */
 function loadPostsRealtime(userId) { 
+    // window.db ကို index.html မှာ စစ်ဆေးပြီး ထည့်သွင်းထားသည်
     if (!window.db) {
-        // Fallback for mock/testing environment
         const container = document.getElementById('posts-container');
-        if(container) container.innerHTML = '<p class="initial-loading-text" style="color:red;">Firebase DB Not Found. Check index.html config.</p>';
+        if(container) container.innerHTML = '<p class="initial-loading-text" style="color:red;">❌ Database Not Initialized. Check index.html config.</p>';
         return;
     }
 
     if (unsubscribeFromPosts) {
-        unsubscribeFromPosts();
+        unsubscribeFromPosts(); // ယခင် listener ကို ဖြုတ်ပါ
     }
 
     const container = document.getElementById('posts-container');
     if (!container) return;
     container.innerHTML = '<p class="initial-loading-text">Connecting to server...</p>';
 
-    let query = db.collection(POSTS_COLLECTION);
+    let query = window.db.collection(POSTS_COLLECTION);
     
-    // Sorting (Firestore query)
+    // Sorting (Newest/Oldest)
     const sortField = 'timestamp';
     const sortDirection = currentPostFilter === 'new-posts' ? 'desc' : 'asc';
     query = query.orderBy(sortField, sortDirection);
 
+    // Realtime Listener
     unsubscribeFromPosts = query.onSnapshot(async (snapshot) => {
         const posts = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         }));
 
-        container.innerHTML = '';
+        container.innerHTML = ''; 
+        
         if (posts.length === 0) {
             container.innerHTML = '<p class="initial-loading-text">No posts found yet. Be the first to post!</p>';
         } else {
-             // Promise.all ကိုသုံး၍ Post အားလုံးကို Like Count ပါ ထည့်ပြီး Render လုပ်ပါ
+             // Promise.all ကိုသုံး၍ Post element တွေ အားလုံးကို ဖန်တီးပါ
             const postElements = await Promise.all(posts.map(post => createPostElement(post, userId)));
             postElements.forEach(el => container.appendChild(el));
         }
-        addPostEventListeners(userId);
+        addPostEventListeners(userId); // Listener ပြီးမှ Event listener တွေ ပြန်ထည့်ပါ
     }, error => {
         console.error("Error listening to posts:", error);
         container.innerHTML = '<p class="initial-loading-text" style="color:var(--tg-theme-destructive-text-color);">❌ Failed to load posts from server.</p>';
@@ -153,7 +152,7 @@ async function toggleLike(e, userId) {
 
     const likeButton = e.currentTarget;
     const postId = likeButton.getAttribute('data-post-id');
-    const likeDocRef = db.collection(LIKES_COLLECTION).doc(`${postId}_${userId}`);
+    const likeDocRef = window.db.collection(LIKES_COLLECTION).doc(`${postId}_${userId}`);
     
     try {
         const doc = await likeDocRef.get();
@@ -164,9 +163,9 @@ async function toggleLike(e, userId) {
         if (doc.exists) {
             // Unliking
             await likeDocRef.delete();
-            showToast("Unliked.");
             change = -1;
             isLikedNow = false;
+            showToast("Unliked.");
         } else {
             // Liking
             await likeDocRef.set({
@@ -174,9 +173,9 @@ async function toggleLike(e, userId) {
                 userId: userId,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             });
-            showToast("Liked!");
             change = 1;
             isLikedNow = true;
+            showToast("Liked!");
         }
         
         // UI Update (Immediate feedback)
@@ -192,15 +191,12 @@ async function toggleLike(e, userId) {
  * Like Count ကို UI တွင် မြန်မြန်ဆန်ဆန် ပြသရန် Update လုပ်သည်။
  */
 function updateLikeCountDisplay(likeButton, change, isLikedNow) {
-    const currentCountText = likeButton.textContent.trim();
+    const currentCountText = likeButton.textContent.replace(/[^0-9]/g, ''); 
     let currentCount = parseInt(currentCountText) || 0;
     
     const newCount = Math.max(0, currentCount + change);
     
-    // Like button ၏ innerText ကို update လုပ်ပါ
-    // Note: DOM ကို တိုက်ရိုက် ပြင်တာက Realtime Listener ထက် ပိုမြန်လို့ ဒီလိုလုပ်တာပါ
-    likeButton.textContent = ` ${newCount}`; 
-    likeButton.prepend(document.createElement('i')).className = 'fas fa-heart'; // Icon ကို ပြန်ထည့်ပါ
+    likeButton.innerHTML = `<i class="fas fa-heart"></i> ${newCount}`;
     likeButton.classList.toggle('liked', isLikedNow);
 }
 
@@ -214,8 +210,7 @@ function updateLikeCountDisplay(likeButton, change, isLikedNow) {
 async function getPostLikeCount(postId) {
     if (!window.db) return 0;
     try {
-        // Firestore ၏ Count feature ကို အသုံးမပြုဘဲ ရိုးရိုး Query ကို အသုံးပြုပါ
-        const snapshot = await db.collection(LIKES_COLLECTION)
+        const snapshot = await window.db.collection(LIKES_COLLECTION)
                                  .where('postId', '==', postId)
                                  .get();
         return snapshot.size;
@@ -234,7 +229,7 @@ async function createPostElement(post, userId) {
     
     let isLiked = false;
     if (window.db) {
-        const likeDoc = await db.collection(LIKES_COLLECTION).doc(`${postId}_${userId}`).get();
+        const likeDoc = await window.db.collection(LIKES_COLLECTION).doc(`${postId}_${userId}`).get();
         isLiked = likeDoc.exists;
     }
 
@@ -245,6 +240,8 @@ async function createPostElement(post, userId) {
         ? `<button class="delete-btn" data-post-id="${postId}"><i class="fas fa-trash"></i> Delete</button>` 
         : '';
 
+    // post.content တွင် HTML injection မဖြစ်စေရန် sanitizer ကို ထည့်ရန် လိုအပ်သည်၊ 
+    // သို့သော် လောလောဆယ်တွင် Pre-wrap သုံးပြီး Plain text အဖြစ် သတ်မှတ်ထားသည်
     postElement.innerHTML = `
         <p class="post-content">${post.content}</p>
         <div class="post-actions">
@@ -265,7 +262,7 @@ function performDeletePost(postId, userId) {
         return;
     }
     
-    const postRef = db.collection(POSTS_COLLECTION).doc(postId);
+    const postRef = window.db.collection(POSTS_COLLECTION).doc(postId);
     
     postRef.delete().then(() => {
         showToast("Post deleted successfully!");
@@ -321,7 +318,7 @@ function setupPostFilters() {
 }
 
 // ===========================================
-//          ADMIN POST LOGIC (Database Saving)
+//          ADMIN POST LOGIC 
 // ===========================================
 
 function setupAdminPostLogic(isAdmin) { 
@@ -346,11 +343,10 @@ function setupAdminPostLogic(isAdmin) {
                         authorName: currentUserName || 'Admin', 
                         isAdmin: true,
                         content: content,
-                        // Firestore server time ကို အသုံးပြု၍ အချိန်မှန်စေပါ
                         timestamp: firebase.firestore.FieldValue.serverTimestamp(), 
                     };
                     
-                    db.collection(POSTS_COLLECTION).add(newPost)
+                    window.db.collection(POSTS_COLLECTION).add(newPost)
                         .then(() => {
                             postInput.value = ''; 
                             const newPostsTab = document.getElementById('new-posts-tab');
@@ -374,7 +370,7 @@ function setupAdminPostLogic(isAdmin) {
 }
 
 // ===========================================
-//          MODAL & MUSIC LOGIC (UNCHANGED)
+//          MODAL & MUSIC LOGIC 
 // ===========================================
 
 function openModal(modalId) { 
@@ -404,16 +400,16 @@ function closeModal(modalId) {
 
 function updateMusicStatus(isPlaying) { 
     if (!musicStatusSpan || !volumeToggleIcon) return;
-    let statusText = isPlaying ? `🎶 Music Playing ${isMusicMuted ? '(Muted)' : ''} 🎶` : 'Music Paused (Tap Icon to Play)';
+    let statusText = isPlaying 
+        ? `🎶 Music Playing ${isMusicMuted ? '(Muted)' : ''} 🎶` 
+        : 'Music Paused (Tap Icon to Play)';
     musicStatusSpan.textContent = statusText;
     
     if (isPlaying) {
-        volumeToggleIcon.classList.toggle('fa-volume-up', !isMusicMuted);
-        volumeToggleIcon.classList.toggle('fa-volume-off', isMusicMuted);
+        volumeToggleIcon.className = `fas ${isMusicMuted ? 'fa-volume-off' : 'fa-volume-up'}`;
         volumeToggleIcon.title = isMusicMuted ? "Unmute Music" : "Mute Music";
     } else {
-        volumeToggleIcon.classList.remove('fa-volume-up');
-        volumeToggleIcon.classList.add('fa-volume-off');
+        volumeToggleIcon.className = 'fas fa-volume-off';
         volumeToggleIcon.title = "Start Playing Music";
     }
 }
@@ -427,7 +423,7 @@ function toggleVolume() {
             showToast(isMusicMuted ? "Music started (Muted)." : "Music started playing.");
         }).catch(e => {
             console.error("Failed to play on user click:", e);
-            showToast('Playback Failed. Tap screen first, or check music link.');
+            showToast('Playback Failed. User interaction required.');
         });
     } else {
         isMusicMuted = !isMusicMuted;
@@ -474,7 +470,7 @@ function setMusicUrl(url, sourceName) {
     localStorage.setItem(TEMP_MUSIC_KEY, url);
     audioPlayer.src = url;
     audioPlayer.load();
-    audioPlayer.pause();
+    audioPlayer.pause(); 
     
     closeModal('music-modal');
     closeModal('url-input-modal');
@@ -494,7 +490,8 @@ function addMusicEventListeners() {
                 closeModal('music-modal'); 
                 openModal('url-input-modal'); 
                 const urlInput = document.getElementById('music-url-input');
-                if (urlInput) urlInput.value = localStorage.getItem(TEMP_MUSIC_KEY) === INITIAL_DEFAULT_URL ? '' : localStorage.getItem(TEMP_MUSIC_KEY) || ''; 
+                const savedUrl = localStorage.getItem(TEMP_MUSIC_KEY);
+                if (urlInput) urlInput.value = (savedUrl && savedUrl !== INITIAL_DEFAULT_URL) ? savedUrl : ''; 
             }
         };
     });
@@ -516,9 +513,11 @@ function addMusicEventListeners() {
     const fileInput = document.getElementById('music-upload-input');
     fileInput.onchange = (e) => {
         const file = e.target.files[0];
-        if (file) {
+        if (file && file.type.startsWith('audio/')) {
             const url = URL.createObjectURL(file); 
             setMusicUrl(url, file.name); 
+        } else {
+             showToast("Please select a valid audio file.");
         }
         e.target.value = null; 
     };
@@ -526,7 +525,7 @@ function addMusicEventListeners() {
 
 
 // ===========================================
-//          PROFILE LOGIC (UNCHANGED)
+//          PROFILE & NAVIGATION LOGIC 
 // ===========================================
 
 function updateProfileDisplay(userId, fullName, username, is_admin) { 
@@ -536,10 +535,12 @@ function updateProfileDisplay(userId, fullName, username, is_admin) {
     document.getElementById('telegram-chat-id').textContent = userId.toString();
     const adminStatusEl = document.getElementById('admin-status');
     adminStatusEl.textContent = is_admin ? 'Administrator' : 'Regular User';
-    adminStatusEl.style.backgroundColor = is_admin ? 'var(--tg-theme-accent)' : 'var(--tg-theme-link-color)';
+    adminStatusEl.style.backgroundColor = is_admin ? 'var(--tg-theme-link-color)' : 'var(--tg-theme-hint-color)';
+    
     const tgUser = tg ? tg.initDataUnsafe.user : null;
     const tgPhotoUrl = tgUser ? tgUser.photo_url : null;
     const profileAvatarPlaceholder = document.getElementById('profile-avatar-placeholder');
+
     if (profileAvatarPlaceholder) {
         if (tgPhotoUrl) {
             profileAvatarPlaceholder.innerHTML = `<img src="${tgPhotoUrl}" alt="${fullName || 'Profile Photo'}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
@@ -563,10 +564,6 @@ function setupProfileListeners() {
     if (closeBtn) closeBtn.onclick = () => tg && tg.close ? tg.close() : showToast("Mini App Close API Not Available."); 
 }
 
-// ===========================================
-//          NAVIGATION & MAIN ENTRY
-// ===========================================
-
 function switchScreen(targetScreenId) { 
     document.querySelectorAll('.content .screen').forEach(screen => screen.classList.remove('active'));
     const targetScreen = document.getElementById(targetScreenId);
@@ -574,10 +571,12 @@ function switchScreen(targetScreenId) {
     document.querySelectorAll('.bottom-nav .nav-item').forEach(item => {
         item.classList.toggle('active', item.getAttribute('data-screen') === targetScreenId);
     });
+    
     const fixedHeaderArea = document.querySelector('.fixed-header-area');
     const fab = document.getElementById('post-add-button');
     const contentArea = document.querySelector('.content');
     const headerHeight = fixedHeaderArea ? fixedHeaderArea.offsetHeight : 0;
+    
     if (targetScreenId === 'profile-screen') {
         if (fixedHeaderArea) fixedHeaderArea.style.display = 'none';
         if (contentArea) contentArea.style.paddingTop = '20px'; 
@@ -596,7 +595,12 @@ function addNavigationListeners() {
     });
 }
 
+// ===========================================
+//          MAIN ENTRY
+// ===========================================
+
 function main() { 
+    // 1. Get User Info
     const user = tg.initDataUnsafe.user;
     if (user && user.id) {
         currentUserId = parseInt(user.id);
@@ -606,6 +610,7 @@ function main() {
         is_admin = isAdminUser(currentUserId);
     }
     
+    // 2. Setup Components
     addNavigationListeners();
     setupPostFilters();
     setupMusicPlayer();
@@ -613,11 +618,13 @@ function main() {
     setupProfileListeners();
     setupAdminPostLogic(is_admin);
     
+    // 3. Update UI
     updateProfileDisplay(currentUserId, currentUserName, currentUserUsername, is_admin);
     
-    // Database မှ Realtime ဆွဲယူပါ
+    // 4. Load Data
     loadPostsRealtime(currentUserId);
     
+    // 5. Final Setup
     switchScreen('home-screen');
     if (tg.MainButton) tg.MainButton.hide();
     tg.ready(); 
@@ -629,16 +636,18 @@ function setupTMA() {
         const themeParams = tg.themeParams;
         if (themeParams) {
             const root = document.documentElement;
+            // 🎨 New UI Colour Mapping - CSS file တွင် သတ်မှတ်ထားသော အရောင်များကို ပြန်ထည့်ပါ
             const themeMap = {
                 '--tg-theme-bg-color': themeParams.bg_color || '#0d1117',
-                '--tg-theme-text-color': themeParams.text_color || '#ffffff',
-                '--tg-theme-link-color': themeParams.link_color || '#4c8cff',
-                '--tg-theme-hint-color': themeParams.hint_color || '#90a4ae',
-                '--tg-theme-button-color': themeParams.button_color || '#4c8cff',
-                '--tg-theme-button-text-color': themeParams.button_text_color || '#ffffff',
                 '--tg-theme-secondary-bg-color': themeParams.secondary_bg_color || '#1a202c',
-                '--tg-theme-destructive-text-color': themeParams.destructive_text_color || '#ff5252'
+                '--tg-theme-text-color': themeParams.text_color || '#ffffff',
+                '--tg-theme-link-color': '#20b2aa', 
+                '--tg-theme-button-color': '#4caf50', 
+                '--tg-theme-button-text-color': themeParams.button_text_color || '#ffffff',
+                '--tg-theme-destructive-text-color': '#ff9800', 
+                '--tg-theme-hint-color': '#bdbdbd'
             };
+            
             for (const [prop, value] of Object.entries(themeMap)) {
                 root.style.setProperty(prop, value);
             }
@@ -646,7 +655,8 @@ function setupTMA() {
         }
         main();
     } else {
-        console.warn("Telegram WebApp SDK not found. Running in fallback mode.");
+        console.warn("Telegram WebApp SDK not found. Running in fallback mode (Local Testing).");
+        
         const mockAdminId = ADMIN_CHAT_IDS.length > 0 ? ADMIN_CHAT_IDS[0] : 123456789; 
         tg = {
             initDataUnsafe: { user: { id: mockAdminId, first_name: "Local", last_name: "Tester", username: "local_tester", photo_url: null } },
@@ -657,12 +667,18 @@ function setupTMA() {
             HapticFeedback: { impactOccurred: () => console.log('Haptic: Light') },
             MainButton: { hide: () => console.log('MainButton: Hide') }
         };
+
+        // Fallback UI Colours for local testing
         const root = document.documentElement;
         root.style.setProperty('--tg-theme-bg-color', '#0d1117');
         root.style.setProperty('--tg-theme-text-color', '#ffffff');
         root.style.setProperty('--tg-theme-secondary-bg-color', '#1a202c');
-        root.style.setProperty('--tg-theme-link-color', '#4c8cff');
+        root.style.setProperty('--tg-theme-link-color', '#20b2aa');
+        root.style.setProperty('--tg-theme-button-color', '#4caf50');
+        root.style.setProperty('--tg-theme-destructive-text-color', '#ff9800');
+        root.style.setProperty('--tg-theme-hint-color', '#bdbdbd');
         document.body.style.backgroundColor = 'var(--tg-theme-bg-color)';
+
         main();
     }
 }

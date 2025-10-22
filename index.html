@@ -1,27 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ZZ Feed | Telegram Mini App</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>ZZ Feed</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
 </head>
 <body>
-  <header>
-    <h1>ZZ Feed</h1>
-    <p>🔥 Admin Posts for Everyone</p>
-  </header>
 
-  <main>
-    <div id="feedContainer" class="feed-container">
-      <p class="loading">Loading posts...</p>
+    <div class="app-container">
+        <div class="fixed-header-area">
+            <header class="main-header">
+                <div class="header-content">
+                    <h2 class="app-title-fixed">ZZ Feed</h2>
+                    <div class="header-icons">
+                        <i class="fas fa-music header-icon" id="music-button" title="Select Background Music"></i>
+                        <i class="fas fa-volume-off header-icon" id="volume-toggle" title="Toggle Music Playback"></i>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="music-status-bar" role="button" aria-controls="audio-player" tabindex="0">
+                <span id="current-music-status">Music Paused (Tap Icon to Play)</span>
+            </div>
+            
+            <nav class="post-filter-tabs" role="tablist">
+                <button class="filter-tab active" data-filter="new-posts" id="new-posts-tab" role="tab" aria-selected="true">Newest</button>
+                <button class="filter-tab" data-filter="old-posts" id="old-posts-tab" role="tab" aria-selected="false">Oldest</button>
+            </nav>
+        </div>
+
+        <div class="content">
+            
+            <section id="home-screen" class="screen active" role="main">
+                <div id="posts-container" class="posts-container">
+                    <p class="initial-loading-text">Loading posts...</p>
+                </div>
+            </section>
+            
+            <section id="profile-screen" class="screen" role="main">
+                <header class="profile-header">
+                    <h2>Profile & Settings</h2>
+                </header>
+                
+                <div class="profile-header-card elevated-card">
+                    <div class="profile-avatar-container">
+                        <div class="profile-avatar" id="profile-avatar-placeholder" aria-label="User Profile Picture"></div>
+                        <h3 id="profile-display-name">Name Not Available</h3>
+                        <p id="profile-display-username" class="username-display">Username Not Available</p>
+                    </div>
+                    <div class="profile-status" id="admin-status">User</div>
+                </div>
+                
+                <div class="list-group">
+                    <h4 class="group-title">Account Information</h4>
+                    <div class="elevated-list">
+                        <div class="info-item copy-item" id="chat-id-copy-btn" role="button" tabindex="0">
+                            <i class="fas fa-id-card-alt"></i>
+                            <div class="info-details">
+                                <span class="info-title">Telegram User ID (Tap to Copy)</span>
+                                <span class="info-subtitle" id="telegram-chat-id">Loading...</span>
+                            </div>
+                            <i class="fas fa-copy copy-icon"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="list-group">
+                    <h4 class="group-title">App Actions</h4>
+                    <div class="elevated-list">
+                        <div class="info-item close-item" id="tma-close-btn" role="button" tabindex="0">
+                            <i class="fas fa-power-off"></i>
+                            <div class="info-details">
+                                <span class="info-title">Close Mini App</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <button class="fab" id="post-add-button" title="New Admin Post" style="display: none;">
+            <i class="fas fa-bullhorn"></i>
+        </button>
+
+        <nav class="bottom-nav" role="navigation">
+            <button class="nav-item active" data-screen="home-screen" aria-label="Home">
+                <i class="fas fa-house-chimney"></i>
+                <span>Home</span>
+            </button>
+            <button class="nav-item" data-screen="profile-screen" aria-label="Profile">
+                <i class="fas fa-user-gear"></i>
+                <span>Profile</span>
+            </button>
+        </nav>
+
+        <audio id="audio-player" controls style="display: none;"></audio>
+        
+        <div id="post-modal" class="modal modal-backdrop" role="dialog" aria-modal="true" style="display: none;">
+            <div class="modal-content post-modal-content">
+                <h3>New Admin Announcement</h3>
+                <textarea id="post-input" placeholder="Enter your announcement here (max 500 chars)..."></textarea>
+                <div class="modal-actions">
+                    <button id="cancel-post-btn" class="secondary-btn">Cancel</button>
+                    <button id="submit-post-btn" class="primary-btn"><i class="fas fa-paper-plane"></i> Post</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="music-modal" class="modal modal-backdrop" role="dialog" aria-modal="true" style="display: none;">
+            <div class="modal-content">
+                <h3>Select Background Music Source</h3>
+                <div class="music-option-list">
+                    <button class="music-option" data-music-type="default">
+                        <i class="fas fa-play"></i> 
+                        <div class="option-details">
+                            <strong>Default Track</strong>
+                            <span>Play the app's predefined background music.</span>
+                        </div>
+                    </button>
+                    <button class="music-option" data-music-type="url">
+                        <i class="fas fa-link"></i> 
+                        <div class="option-details">
+                            <strong>Temporary Music Link (URL)</strong>
+                            <span>Use a direct audio link from the internet.</span>
+                        </div>
+                    </button>
+                    <label for="music-upload-input" class="music-option" role="button" tabindex="0">
+                        <i class="fas fa-cloud-upload-alt"></i> 
+                        <div class="option-details">
+                            <strong>Upload Local File</strong>
+                            <span>Select an audio file from your device.</span>
+                        </div>
+                    </label>
+                    <input type="file" id="music-upload-input" accept="audio/*" style="display: none;">
+                </div>
+                <button id="cancel-music-modal-btn" class="secondary-btn">Close</button>
+            </div>
+        </div>
+        
+        <div id="url-input-modal" class="modal modal-backdrop nested-modal" role="dialog" aria-modal="true" style="display: none;">
+            <div class="modal-content">
+                <h3>Enter Music URL</h3>
+                <input type="url" id="music-url-input" placeholder="e.g.: https://example.com/song.mp3">
+                <div class="modal-actions">
+                    <button id="close-url-modal-btn" class="secondary-btn">Cancel</button>
+                    <button id="play-url-btn" class="primary-btn">Start Playing</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="custom-toast" class="custom-toast" role="status" aria-live="polite"></div>
+
     </div>
-  </main>
 
-  <footer>
-    <p>Powered by ZZ Network</p>
-  </footer>
-
-  <script type="module" src="tma-script.js"></script>
+    <script src="tma-script.js"></script>
 </body>
 </html>

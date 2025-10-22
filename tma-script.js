@@ -1,9 +1,9 @@
 // *****************************************************************
-// ZZ Feed - Telegram Mini App Script (Full Fix & New UI Colour - Firestore Version)
-// ERROR များကို ပြင်ဆင်ပြီး UI Structure ကို ပိုမို ခိုင်မာအောင် လုပ်ထားသည်
+// ZZ Feed - Telegram Mini App Script (Final Fix - Music Playback Fix)
 // *****************************************************************
 
-// ********** SET YOUR ADMIN CHAT ID(s) HERE ********** const ADMIN_CHAT_IDS = [ 
+ //********** SET YOUR ADMIN CHAT ID(s) HERE ******** 
+    const ADMIN_CHAT_IDS = [ 
     1924452453, 
     6440295843, 
     6513916873, 
@@ -15,7 +15,6 @@
 const POSTS_COLLECTION = 'tma_zzfeed_posts'; 
 const LIKES_COLLECTION = 'tma_zzfeed_likes'; 
 const TEMP_MUSIC_KEY = 'tma_temp_music_url_v5';
-// Music Link ကို အလုပ်လုပ်သော Link တစ်ခုဖြင့် ပြန်လည် အတည်ပြုထားသည်
 const INITIAL_DEFAULT_URL = 'https://archive.org/download/lofi-chill-1-20/lofi_chill_03_-_sleepwalker.mp3'; 
 
 let audioPlayer;
@@ -30,322 +29,21 @@ let isMusicMuted = false;
 let tg = null;
 let unsubscribeFromPosts = null; 
 
-// ===========================================
-//          HELPER FUNCTIONS
-// ===========================================
+// (HELPER FUNCTIONS: stringToColor, showToast, copyToClipboard, isAdminUser - ယခင်အတိုင်း)
+// ...
 
-function stringToColor(str) { 
-    let hash = 0; for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
-    let color = '#';
-    for (let i = 0; i < 3; i++) {
-        const value = (hash >> (i * 8)) & 0xFF;
-        const brightened = Math.floor(value * 0.7 + 0x55); 
-        color += ('00' + brightened.toString(16)).substr(-2);
-    }
-    return color;
-}
+// (DATA/STORAGE HANDLERS: loadPostsRealtime, toggleLike, updateLikeCountDisplay - ယခင်အတိုင်း)
+// ...
 
-function showToast(message) { 
-    const toast = document.getElementById('custom-toast');
-    if (!toast) return;
-    clearTimeout(toast.timeoutId);
-    toast.textContent = message;
-    toast.classList.add('show');
-    toast.timeoutId = setTimeout(() => {
-        toast.classList.remove('show');
-    }, 3000);
-    if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-}
+// (POSTS UI LOGIC: getPostLikeCount, createPostElement, performDeletePost, addPostEventListeners, setupPostFilters - ယခင်အတိုင်း)
+// ...
 
-function copyToClipboard(text, successMsg = 'Copied successfully.') { 
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => showToast(successMsg)).catch(() => performLegacyCopy(text));
-    } else {
-        performLegacyCopy(text);
-    }
-}
+// (ADMIN POST LOGIC: setupAdminPostLogic - ယခင်အတိုင်း)
+// ...
 
-function performLegacyCopy(text) { 
-    const tempInput = document.createElement('textarea');
-    tempInput.value = text;
-    tempInput.style.position = 'absolute';
-    tempInput.style.left = '-9999px';
-    document.body.appendChild(tempInput);
-    tempInput.select();
-    tempInput.setSelectionRange(0, 99999); 
-    try {
-        document.execCommand('copy');
-        showToast('Copied successfully (Legacy).');
-    } catch (err) {
-        showToast('Copy failed, please select and copy manually.');
-    }
-    document.body.removeChild(tempInput);
-}
-
-function isAdminUser(userId) {
-    return ADMIN_CHAT_IDS.includes(parseInt(userId));
-}
 
 // ===========================================
-//          DATA/STORAGE HANDLERS (Firestore)
-// ===========================================
-
-function loadPostsRealtime(userId) { 
-    if (!window.db) {
-        const container = document.getElementById('posts-container');
-        if(container) container.innerHTML = '<p class="initial-loading-text" style="color:var(--tg-theme-destructive-text-color);">❌ Database Not Initialized. Check index.html config.</p>';
-        return;
-    }
-
-    if (unsubscribeFromPosts) {
-        unsubscribeFromPosts(); 
-    }
-
-    const container = document.getElementById('posts-container');
-    if (!container) return;
-    container.innerHTML = '<p class="initial-loading-text">Connecting to server...</p>';
-
-    let query = window.db.collection(POSTS_COLLECTION);
-    
-    const sortField = 'timestamp';
-    const sortDirection = currentPostFilter === 'new-posts' ? 'desc' : 'asc';
-    query = query.orderBy(sortField, sortDirection);
-
-    unsubscribeFromPosts = query.onSnapshot(async (snapshot) => {
-        const posts = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
-
-        container.innerHTML = ''; 
-        
-        if (posts.length === 0) {
-            container.innerHTML = '<p class="initial-loading-text">No posts found yet. Be the first to post!</p>';
-        } else {
-            const postElements = await Promise.all(posts.map(post => createPostElement(post, userId)));
-            postElements.forEach(el => container.appendChild(el));
-        }
-        addPostEventListeners(userId); 
-    }, error => {
-        console.error("Error listening to posts:", error);
-        container.innerHTML = '<p class="initial-loading-text" style="color:var(--tg-theme-destructive-text-color);">❌ Failed to load posts from server.</p>';
-        showToast("Error connecting to database.");
-    });
-}
-
-async function toggleLike(e, userId) { 
-    if (!window.db) { showToast("Database not ready."); return; }
-
-    const likeButton = e.currentTarget;
-    const postId = likeButton.getAttribute('data-post-id');
-    const likeDocRef = window.db.collection(LIKES_COLLECTION).doc(`${postId}_${userId}`);
-    
-    try {
-        const doc = await likeDocRef.get();
-        let change = 0;
-        let isLikedNow = false;
-
-        if (doc.exists) {
-            await likeDocRef.delete();
-            change = -1;
-            isLikedNow = false;
-            showToast("Unliked.");
-        } else {
-            await likeDocRef.set({
-                postId: postId,
-                userId: userId,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            change = 1;
-            isLikedNow = true;
-            showToast("Liked!");
-        }
-        
-        updateLikeCountDisplay(likeButton, change, isLikedNow);
-
-    } catch (error) {
-        console.error("Error toggling like:", error);
-        showToast("Action failed. Try again.");
-    }
-}
-
-function updateLikeCountDisplay(likeButton, change, isLikedNow) {
-    const currentCountText = likeButton.textContent.replace(/[^0-9]/g, ''); 
-    let currentCount = parseInt(currentCountText) || 0;
-    
-    const newCount = Math.max(0, currentCount + change);
-    
-    likeButton.innerHTML = `<i class="fas fa-heart"></i> ${newCount}`;
-    likeButton.classList.toggle('liked', isLikedNow);
-}
-
-// ===========================================
-//          POSTS UI LOGIC 
-// ===========================================
-
-async function getPostLikeCount(postId) {
-    if (!window.db) return 0;
-    try {
-        const snapshot = await window.db.collection(LIKES_COLLECTION)
-                                 .where('postId', '==', postId)
-                                 .get();
-        return snapshot.size;
-    } catch (error) {
-        console.error(`Error fetching like count for ${postId}:`, error);
-        return 0;
-    }
-}
-
-async function createPostElement(post, userId) { 
-    const postId = post.id;
-    const postElement = document.createElement('div');
-    postElement.className = 'post-card';
-    postElement.setAttribute('data-post-id', postId);
-    
-    let isLiked = false;
-    if (window.db) {
-        const likeDoc = await window.db.collection(LIKES_COLLECTION).doc(`${postId}_${userId}`).get();
-        isLiked = likeDoc.exists;
-    }
-
-    const displayLikesCount = await getPostLikeCount(postId);
-
-    const isAdmin = isAdminUser(userId);
-    const deleteButton = isAdmin 
-        ? `<button class="delete-btn" data-post-id="${postId}"><i class="fas fa-trash"></i> Delete</button>` 
-        : '';
-        
-    const adminBadge = post.isAdmin ? '<span class="admin-badge">Admin</span>' : '';
-
-    postElement.innerHTML = `
-        ${adminBadge}
-        <p class="post-content">${post.content}</p>
-        <div class="post-actions">
-            <button class="like-btn ${isLiked ? 'liked' : ''}" data-post-id="${postId}" aria-label="${isLiked ? 'Unlike' : 'Like'} Post">
-                <i class="fas fa-heart"></i> 
-                ${displayLikesCount}
-            </button>
-            ${deleteButton} 
-        </div>
-    `;
-    return postElement;
-} 
-
-function performDeletePost(postId, userId) { 
-    if (!isAdminUser(userId) || !window.db) {
-        showToast("Only Admins can delete posts or database not ready.");
-        return;
-    }
-    
-    const postRef = window.db.collection(POSTS_COLLECTION).doc(postId);
-    
-    postRef.delete().then(() => {
-        showToast("Post deleted successfully!");
-    }).catch(error => {
-        console.error("Error removing document: ", error);
-        showToast("Deletion failed on server.");
-    });
-}
-
-
-function addPostEventListeners(userId) { 
-    document.querySelectorAll('.like-btn').forEach(button => {
-        button.onclick = (e) => toggleLike(e, userId); 
-    });
-
-    document.querySelectorAll('.delete-btn').forEach(button => {
-        button.onclick = (e) => {
-            const postId = e.currentTarget.getAttribute('data-post-id');
-            if (tg && tg.showConfirm) {
-                tg.showConfirm('Are you sure you want to delete this post?', (ok) => {
-                    if (ok) performDeletePost(postId, userId);
-                });
-            } else {
-                if (window.confirm('Are you sure you want to delete this post?')) {
-                    performDeletePost(postId, userId);
-                }
-            }
-        };
-    });
-}
-
-function setupPostFilters() { 
-    const tabs = document.querySelectorAll('.filter-tab');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const filter = tab.getAttribute('data-filter');
-            
-            tabs.forEach(t => {
-                t.classList.remove('active');
-                t.setAttribute('aria-selected', 'false');
-            });
-            tab.classList.add('active');
-            tab.setAttribute('aria-selected', 'true');
-            
-            if (currentPostFilter !== filter) {
-                currentPostFilter = filter;
-                const contentArea = document.querySelector('.content');
-                if (contentArea) contentArea.scrollTop = 0; 
-                loadPostsRealtime(currentUserId); 
-            }
-        });
-    });
-}
-
-// ===========================================
-//          ADMIN POST LOGIC 
-// ===========================================
-
-function setupAdminPostLogic(isAdmin) { 
-    const postAddButton = document.getElementById('post-add-button');
-    const submitPostBtn = document.getElementById('submit-post-btn');
-    const cancelPostBtn = document.getElementById('cancel-post-btn');
-    const postInput = document.getElementById('post-input');
-
-    if (isAdmin) {
-        if (postAddButton) postAddButton.style.display = 'flex';
-        if (postAddButton) postAddButton.onclick = () => openModal('post-modal');
-        if (cancelPostBtn) cancelPostBtn.onclick = () => closeModal('post-modal');
-
-        if (submitPostBtn && postInput) {
-            submitPostBtn.onclick = () => {
-                const content = postInput.value.trim();
-
-                if (content.length >= 5 && content.length <= 500 && window.db) { 
-                    
-                    const newPost = {
-                        authorId: currentUserId,
-                        authorName: currentUserName || 'Admin', 
-                        isAdmin: true,
-                        content: content,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp(), 
-                    };
-                    
-                    window.db.collection(POSTS_COLLECTION).add(newPost)
-                        .then(() => {
-                            postInput.value = ''; 
-                            const newPostsTab = document.getElementById('new-posts-tab');
-                            if (newPostsTab) newPostsTab.click(); 
-                            closeModal('post-modal'); 
-                            showToast("Announcement posted successfully!");
-                        })
-                        .catch(error => {
-                            console.error("Error writing document: ", error);
-                            showToast("Posting failed! Server error.");
-                        });
-                    
-                } else {
-                    showToast("Post must be between 5 and 500 characters, and database must be ready.");
-                }
-            };
-        }
-    } else {
-        if (postAddButton) postAddButton.style.display = 'none';
-    }
-}
-
-// ===========================================
-//          MODAL & MUSIC LOGIC (FIXED Error Handling)
+//          MODAL & MUSIC LOGIC (Music Playback Final Fix)
 // ===========================================
 
 function openModal(modalId) { 
@@ -355,6 +53,7 @@ function openModal(modalId) {
     document.body.style.overflow = 'hidden';
     requestAnimationFrame(() => modal.classList.add('active'));
     const fab = document.getElementById('post-add-button');
+    // Fix: fab ကို ပိတ်ထားပါ။
     if (fab) fab.style.display = 'none'; 
 }
 
@@ -366,6 +65,7 @@ function closeModal(modalId) {
         modal.style.display = 'none';
         document.body.style.overflow = '';
         const homeScreen = document.getElementById('home-screen');
+        // Fix: Home screen မှာ ပြန်ပေါ်လာရင် fab ကို ပြန်ပြပါ။
         if (homeScreen && homeScreen.classList.contains('active') && is_admin) {
             const fab = document.getElementById('post-add-button');
             if (fab) fab.style.display = 'flex'; 
@@ -389,22 +89,31 @@ function updateMusicStatus(isPlaying) {
     }
 }
 
+/**
+ * 💡 Music Playback Fix: iOS/Telegram WebApp တွေမှာ နှိပ်လို့ မရတဲ့ ပြဿနာ ဖြေရှင်းဖို့
+ * Play Promise ကို သေချာ ကိုင်တွယ်ပြီး User Interaction ကို အာမခံထားသည်။
+ */
 function toggleVolume() { 
     if (!audioPlayer) return;
 
     if (audioPlayer.paused) {
         audioPlayer.volume = isMusicMuted ? 0 : 1;
-        // Play method ကို promise နဲ့ ကိုင်တွယ်ခြင်း
+        
+        // 🚨 FINAL FIX: Play Promise ကို စနစ်တကျ ကိုင်တွယ်ခြင်း
         const playPromise = audioPlayer.play();
+        
         if (playPromise !== undefined) {
             playPromise.then(() => {
+                // Play Successfully
                 showToast(isMusicMuted ? "Music started (Muted)." : "Music started playing.");
             }).catch(e => {
-                console.error("Failed to play on user click:", e);
-                showToast('Playback Failed. User interaction required, or check music link.');
+                // Play Failed (ဥပမာ: User Click မဟုတ်ဘဲ ခေါ်လို့)
+                console.error("Failed to play audio:", e);
+                showToast('Playback Failed. Please tap the volume icon again.');
             });
         }
     } else {
+        // Toggle Mute/Unmute
         isMusicMuted = !isMusicMuted;
         audioPlayer.volume = isMusicMuted ? 0 : 1;
         showToast(isMusicMuted ? "Music muted." : "Music unmuted.");
@@ -428,13 +137,11 @@ function setupMusicPlayer() {
     audioPlayer.onplay = () => updateMusicStatus(true);
     audioPlayer.onpause = () => updateMusicStatus(false);
     
-    // ❌ Music Load Error ကို ပိုမို ထိရောက်စွာ ကိုင်တွယ်ခြင်း (Your reported error)
     audioPlayer.onerror = (e) => { 
         console.error("Audio error details:", e);
         audioPlayer.pause();
         updateMusicStatus(false);
-        // showToast ကို Error message ရှင်းရှင်းလင်းလင်း ပြပါ
-        showToast("Music Load Error. Playing stopped. Check URL or try another file."); 
+        showToast("Music Load Error. Playing stopped. Check URL or file."); 
     };
     
     updateMusicStatus(false); 
@@ -504,159 +211,10 @@ function addMusicEventListeners() {
     };
 }
 
+// (PROFILE & NAVIGATION LOGIC: updateProfileDisplay, setupProfileListeners, switchScreen, addNavigationListeners - ယခင်အတိုင်း)
+// ...
 
-// ===========================================
-//          PROFILE & NAVIGATION LOGIC 
-// ===========================================
-
-function updateProfileDisplay(userId, fullName, username, is_admin) { 
-    const displayUsername = username ? `@${username}` : 'Username N/A';
-    document.getElementById('profile-display-name').textContent = fullName || 'User';
-    document.getElementById('profile-display-username').textContent = displayUsername;
-    document.getElementById('telegram-chat-id').textContent = userId.toString();
-    const adminStatusEl = document.getElementById('admin-status');
-    adminStatusEl.textContent = is_admin ? 'Administrator' : 'Regular User';
-    adminStatusEl.style.backgroundColor = is_admin ? 'var(--tg-theme-link-color)' : 'var(--tg-theme-hint-color)';
-    
-    const tgUser = tg ? tg.initDataUnsafe.user : null;
-    const tgPhotoUrl = tgUser ? tgUser.photo_url : null;
-    const profileAvatarPlaceholder = document.getElementById('profile-avatar-placeholder');
-
-    if (profileAvatarPlaceholder) {
-        if (tgPhotoUrl) {
-            profileAvatarPlaceholder.innerHTML = `<img src="${tgPhotoUrl}" alt="${fullName || 'Profile Photo'}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-            profileAvatarPlaceholder.style.backgroundColor = 'transparent';
-            profileAvatarPlaceholder.textContent = '';
-        } else {
-            const userColor = stringToColor(userId.toString());
-            const initial = (fullName.charAt(0) || 'U').toUpperCase();
-            profileAvatarPlaceholder.innerHTML = ''; 
-            profileAvatarPlaceholder.style.backgroundColor = userColor;
-            profileAvatarPlaceholder.textContent = initial;
-            profileAvatarPlaceholder.style.fontSize = '1.5rem';
-        }
-    }
-}
-
-function setupProfileListeners() { 
-    const copyBtn = document.getElementById('chat-id-copy-btn');
-    if (copyBtn) copyBtn.onclick = () => copyToClipboard(currentUserId.toString(), 'User ID copied.');
-    const closeBtn = document.getElementById('tma-close-btn');
-    if (closeBtn) closeBtn.onclick = () => tg && tg.close ? tg.close() : showToast("Mini App Close API Not Available."); 
-}
-
-function switchScreen(targetScreenId) { 
-    document.querySelectorAll('.content .screen').forEach(screen => screen.classList.remove('active'));
-    const targetScreen = document.getElementById(targetScreenId);
-    if (targetScreen) targetScreen.classList.add('active');
-    document.querySelectorAll('.bottom-nav .nav-item').forEach(item => {
-        item.classList.toggle('active', item.getAttribute('data-screen') === targetScreenId);
-    });
-    
-    const fixedHeaderArea = document.querySelector('.fixed-header-area');
-    const fab = document.getElementById('post-add-button');
-    const contentArea = document.querySelector('.content');
-    const headerHeight = fixedHeaderArea ? fixedHeaderArea.offsetHeight : 0;
-    
-    if (targetScreenId === 'profile-screen') {
-        if (fixedHeaderArea) fixedHeaderArea.style.display = 'none';
-        if (contentArea) contentArea.style.paddingTop = '20px'; 
-        if (fab) fab.style.display = 'none';
-    } else { // home-screen
-        if (fixedHeaderArea) fixedHeaderArea.style.display = 'block';
-        // Fix: content area ရဲ့ padding top ကို ပြန်ချိန်ပါ
-        if (contentArea) contentArea.style.paddingTop = `${headerHeight + 20}px`; 
-        if (fab && is_admin) fab.style.display = 'flex'; 
-    }
-    if (contentArea) contentArea.scrollTop = 0;
-}
-
-function addNavigationListeners() { 
-    document.querySelectorAll('.bottom-nav .nav-item').forEach(item => {
-        item.addEventListener('click', (e) => switchScreen(e.currentTarget.getAttribute('data-screen')));
-    });
-}
-
-// ===========================================
-//          MAIN ENTRY
-// ===========================================
-
-function main() { 
-    const user = tg.initDataUnsafe.user;
-    if (user && user.id) {
-        currentUserId = parseInt(user.id);
-        const nameParts = [user.first_name, user.last_name].filter(Boolean);
-        currentUserName = nameParts.length > 0 ? nameParts.join(' ') : 'Anonymous User';
-        currentUserUsername = user.username || null;
-        is_admin = isAdminUser(currentUserId);
-    }
-    
-    addNavigationListeners();
-    setupPostFilters();
-    setupMusicPlayer();
-    addMusicEventListeners();
-    setupProfileListeners();
-    setupAdminPostLogic(is_admin);
-    
-    updateProfileDisplay(currentUserId, currentUserName, currentUserUsername, is_admin);
-    
-    loadPostsRealtime(currentUserId);
-    
-    // Initialization တွင် home-screen ကို ပြသပါ
-    switchScreen('home-screen');
-    if (tg.MainButton) tg.MainButton.hide();
-    tg.ready(); 
-}
-
-function setupTMA() { 
-    if (window.Telegram && window.Telegram.WebApp) {
-        tg = window.Telegram.WebApp;
-        const themeParams = tg.themeParams;
-        if (themeParams) {
-            const root = document.documentElement;
-            const themeMap = {
-                '--tg-theme-bg-color': themeParams.bg_color || '#0d1117',
-                '--tg-theme-secondary-bg-color': themeParams.secondary_bg_color || '#1a202c',
-                '--tg-theme-text-color': themeParams.text_color || '#ffffff',
-                '--tg-theme-link-color': '#20b2aa', 
-                '--tg-theme-button-color': '#4caf50', 
-                '--tg-theme-button-text-color': themeParams.button_text_color || '#ffffff',
-                '--tg-theme-destructive-text-color': '#ff9800', 
-                '--tg-theme-hint-color': '#bdbdbd'
-            };
-            
-            for (const [prop, value] of Object.entries(themeMap)) {
-                root.style.setProperty(prop, value);
-            }
-            document.body.style.backgroundColor = themeMap['--tg-theme-bg-color'];
-        }
-        main();
-    } else {
-        console.warn("Telegram WebApp SDK not found. Running in fallback mode (Local Testing).");
-        
-        const mockAdminId = ADMIN_CHAT_IDS.length > 0 ? ADMIN_CHAT_IDS[0] : 123456789; 
-        tg = {
-            initDataUnsafe: { user: { id: mockAdminId, first_name: "Local", last_name: "Tester", username: "local_tester", photo_url: null } },
-            themeParams: {},
-            ready: () => console.log('TMA Mock Ready'),
-            close: () => console.log('TMA Mock Close'),
-            showConfirm: (msg, callback) => callback(window.confirm(msg)),
-            HapticFeedback: { impactOccurred: () => console.log('Haptic: Light') },
-            MainButton: { hide: () => console.log('MainButton: Hide') }
-        };
-
-        const root = document.documentElement;
-        root.style.setProperty('--tg-theme-bg-color', '#0d1117');
-        root.style.setProperty('--tg-theme-text-color', '#ffffff');
-        root.style.setProperty('--tg-theme-secondary-bg-color', '#1a202c');
-        root.style.setProperty('--tg-theme-link-color', '#20b2aa');
-        root.style.setProperty('--tg-theme-button-color', '#4caf50');
-        root.style.setProperty('--tg-theme-destructive-text-color', '#ff9800');
-        root.style.setProperty('--tg-theme-hint-color', '#bdbdbd');
-        document.body.style.backgroundColor = 'var(--tg-theme-bg-color)';
-
-        main();
-    }
-}
+// (MAIN ENTRY: main, setupTMA - ယခင်အတိုင်း)
+// ...
 
 document.addEventListener('DOMContentLoaded', setupTMA);

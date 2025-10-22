@@ -6,7 +6,7 @@ import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11
 const firebaseConfig = {
   apiKey: "AIzaSyDpuDVZXdT6CZ6MlgRAd8bbVYtuIVevzlI",
   authDomain: "zaroqt101.firebaseapp.com",
-  databaseURL: "https://your-database-url.firebaseio.com",
+  databaseURL: "https://zaroqt101-default-rtdb.firebaseio.com",
   projectId: "zaroqt101",
   storageBucket: "zaroqt101.firebasestorage.app",
   messagingSenderId: "141083314351",

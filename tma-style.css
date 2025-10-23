@@ -346,21 +346,41 @@ header {
 /* 6. Modals & Toast (Critical Z-Index Fix) */
 /* -------------------------------------- */
 .modal-overlay {
+/*
+ * ZZ Feed - Custom CSS (FINAL & TESTED Clickability Fix)
+ */
+
+/* ... (ယခင်ကတည်းက ရှိပြီးသား CSS များ - အပိုင်း 1, 2, 3, 5) ... */
+
+/* -------------------------------------- */
+/* 6. Modals & Toast (CRITICAL FINAL FIX) */
+/* -------------------------------------- */
+.modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.7);
-    display: none;
+    
+    /* 🚨 CRITICAL FIX: Default အားဖြင့် လုံးဝ ပိတ်ထားမည် */
+    pointer-events: none; 
+    visibility: hidden; 
+    opacity: 0; 
+    
+    display: flex; 
     justify-content: center;
     align-items: center;
-    z-index: 1000; /* အမြင့်ဆုံး Z-Index */
-    pointer-events: none; /* Modal မဖွင့်ခင် နောက်ခံကို နှိပ်လို့မရအောင် */
+    z-index: 1000; 
+    
+    /* opacity & visibility ကို 0.4s ဖြင့် ညှိမည် */
+    transition: opacity 0.4s ease-out, visibility 0.4s; 
 }
 
 .modal-overlay.active {
     pointer-events: auto; /* Modal ဖွင့်ရင် Clickable ဖြစ်စေရန် */
+    visibility: visible; 
+    opacity: 1;
 }
 
 .modal-content {
@@ -371,13 +391,17 @@ header {
     max-width: 400px;
     transform: translateY(20px);
     opacity: 0;
-    transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+    /* content ရဲ့ animation က 0.4s */
+    transition: transform 0.4s ease-out, opacity 0.4s ease-out; 
 }
 
 .modal-overlay.active .modal-content {
     transform: translateY(0);
     opacity: 1;
 }
+
+/* ... (ကျန်တဲ့ CSS အပိုင်းများ ယခင်အတိုင်း ထားရှိပါ) ... */
+
 
 .modal-content h3 {
     margin-bottom: 15px;

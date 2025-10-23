@@ -1,5 +1,5 @@
 // *****************************************************************
-// ZZ Feed - Telegram Mini App Script (FINAL FULL FIX: Clickability Lock Removed)
+// ZZ Feed - Telegram Mini App Script (FINAL FULL FIX: Clickability & Posting Error Handled)
 // *****************************************************************
 
 // ********** SET YOUR ADMIN CHAT ID(s) HERE **********
@@ -30,7 +30,7 @@ let tg = null;
 let unsubscribeFromPosts = null; 
 
 // ===========================================
-//          HELPER FUNCTIONS (unchanged)
+//          HELPER FUNCTIONS
 // ===========================================
 function showToast(message) { 
     const toast = document.getElementById('custom-toast');
@@ -86,7 +86,7 @@ function performLegacyCopy(text) {
 
 
 // ===========================================
-//          DATA/STORAGE HANDLERS (unchanged)
+//          DATA/STORAGE HANDLERS
 // ===========================================
 
 function loadPostsRealtime(userId) { 
@@ -148,7 +148,7 @@ async function toggleLike(e, userId) {
         updateLikeCountDisplay(likeButton, change, isLikedNow);
     } catch (error) {
         console.error("Error toggling like:", error);
-        showToast("Action failed. Try again.");
+        showToast("Action failed. Try again. (Check Security Rules)");
     }
 }
 
@@ -180,7 +180,8 @@ async function createPostElement(post, userId) {
     
     let isLiked = false;
     if (window.db) {
-        const likeDoc = await window.db.collection(LIKES_COLLECTION).doc(`${postId}_${userId}`).get();
+        // userId ကို String အဖြစ် ထားထားရင် ဖြုတ်ပြီး ပြန်စစ်ပါ
+        const likeDoc = await window.db.collection(LIKES_COLLECTION).doc(`${postId}_${userId.toString()}`).get();
         isLiked = likeDoc.exists;
     }
 
@@ -215,7 +216,7 @@ function performDeletePost(postId, userId) {
         showToast("Post deleted successfully!");
     }).catch(error => {
         console.error("Error removing document: ", error);
-        showToast("Deletion failed on server.");
+        showToast("Deletion failed on server. (Check Security Rules)");
     });
 }
 
@@ -263,7 +264,7 @@ function setupPostFilters() {
 
 
 // ===========================================
-//          ADMIN POST LOGIC (unchanged)
+//          ADMIN POST LOGIC 
 // ===========================================
 
 function setupAdminPostLogic(isAdmin) { 
@@ -284,79 +285,6 @@ function setupAdminPostLogic(isAdmin) {
 
         if (submitPostBtn && postInput) {
             submitPostBtn.onclick = () => {
-                if (!isAdminUser(currentUserId) || !window.db) {
-                    showToast("Error: Authorization or Database not ready.");
-                    closeModal('post-modal');
-                    return;
-                }
-                
-                const content = postInput.value.trim();
-                
-                if (content.length < 5 || content.length > 500) {
-                    showToast("Post must be between 5 and 500 characters.");
-                    return;
-                }
-                
-                submitPostBtn.disabled = true;
-                submitPostBtn.textContent = 'Posting...';
-
-                const newPost = {
-                    authorId: currentUserId,
-                    authorName: currentUserName || 'Admin', 
-                    isAdmin: true,
-                    content: content,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(), 
-                };
-                
-                window.db.collection(POSTS_COLLECTION).add(newPost)
-                    .then(() => {
-                        postInput.value = ''; 
-                        const newPostsTab = document.getElementById('new-posts-tab');
-                        if (newPostsTab) {
-                           newPostsTab.click(); 
-                        }
-                        
-                        closeModal('post-modal'); 
-                        showToast("Announcement posted successfully!");
-                    })
-                    .catch(error => {
-                        console.error("Error writing document: ", error);
-                        showToast(`Posting failed! Server error: ${error.message}`);
-                    })
-                    .finally(() => {
-                        submitPostBtn.disabled = false;
-                        submitPostBtn.textContent = 'Post Now';
-                    });
-            };
-        }// *****************************************************************
-// ZZ Feed - Telegram Mini App Script (FINAL FIX: Posting Error Handling)
-// *****************************************************************
-
-// ... (Previous code remains the same until setupAdminPostLogic)
-
-// ===========================================
-//          ADMIN POST LOGIC (Posting Error Final Fix)
-// ===========================================
-
-function setupAdminPostLogic(isAdmin) { 
-    const postAddButton = document.getElementById('post-add-button');
-    const submitPostBtn = document.getElementById('submit-post-btn');
-    const cancelPostBtn = document.getElementById('cancel-post-btn');
-    const postInput = document.getElementById('post-input');
-
-    if (isAdmin) {
-        if (postAddButton) postAddButton.style.display = 'flex';
-        if (postAddButton) postAddButton.onclick = () => openModal('post-modal');
-        if (cancelPostBtn) { 
-            cancelPostBtn.onclick = () => {
-                postInput.value = ''; 
-                closeModal('post-modal');
-            };
-        }
-
-        if (submitPostBtn && postInput) {
-            submitPostBtn.onclick = () => {
-                // 🚨 CRITICAL CHECK: Database ready ရှိမရှိ စစ်ပါ
                 if (!window.db) {
                     showToast("Error: Database not initialized. Check Firebase config in index.html.");
                     closeModal('post-modal');
@@ -375,12 +303,11 @@ function setupAdminPostLogic(isAdmin) {
                     return;
                 }
                 
-                // Posting state ကို စတင်ပါ
                 submitPostBtn.disabled = true;
                 submitPostBtn.textContent = 'Posting...';
 
                 const newPost = {
-                    authorId: currentUserId,
+                    authorId: currentUserId.toString(), // ID ကို String အနေနဲ့ သိမ်းပါ
                     authorName: currentUserName || 'Admin', 
                     isAdmin: true,
                     content: content,
@@ -391,7 +318,6 @@ function setupAdminPostLogic(isAdmin) {
                     .then(() => {
                         postInput.value = ''; 
                         
-                        // New Post တင်ပြီးရင် Feed ကို New Posts Tab ကို ပြန်ပြောင်းပါ
                         const newPostsTab = document.getElementById('new-posts-tab');
                         if (newPostsTab) {
                            newPostsTab.click(); 
@@ -401,12 +327,11 @@ function setupAdminPostLogic(isAdmin) {
                         showToast("Announcement posted successfully!");
                     })
                     .catch(error => {
-                        // 🚨 ERROR CATCH: Database Error ကို ဖမ်းပြီး User ကို ပြပါ
                         console.error("Error writing document (Check Security Rules): ", error);
                         showToast(`Posting Failed! (Check Console & Security Rules): ${error.message}`);
                     })
                     .finally(() => {
-                        // 🚨 FINAL FIX: အခြေအနေမကောင်းရင်တောင် Button ကို ပြန်ဖွင့်ပေးပါ
+                        // အမြဲတမ်း Button ကို ပြန်ဖွင့်ပေးပါ
                         submitPostBtn.disabled = false;
                         submitPostBtn.textContent = 'Post Now';
                     });
@@ -418,8 +343,6 @@ function setupAdminPostLogic(isAdmin) {
     }
 }
 
-// ... (The rest of the tma-script.js code remains the same)
-
 
 // ===========================================
 //          MODAL & MUSIC LOGIC (CRITICAL FINAL FIX)
@@ -429,16 +352,19 @@ function openModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     
-    // 🚨 CRITICAL FIX: active class ထည့်ပြီး CSS ကနေ visibility/opacity ကို ဖွင့်ပါ
+    // 1. Body Scroll ကို ပိတ်ပါ
     document.body.style.overflow = 'hidden'; 
+    
+    // 2. Active Class ထည့်ပါ (CSS ကနေ pointer-events: auto ဖြစ်စေမည်)
     modal.classList.add('active');
 
+    // 3. FAB ကို ဖျောက်ပါ
     const fab = document.getElementById('post-add-button');
     if (fab) fab.style.display = 'none'; 
     
-    // Modal Overlay ကို နှိပ်ပြီး ပိတ်နိုင်စေရန်
+    // 4. Modal Overlay ကို နှိပ်ပြီး ပိတ်နိုင်စေရန်
     modal.onclick = (e) => {
-        // modal-content ကို နှိပ်တာ မဟုတ်ရင် (i.e. overlay ကို နှိပ်ရင်)
+        // Modal Overlay (modal element) ကို နှိပ်တာ သေချာမှ ပိတ်ပါ
         if (e.target === modal) { 
             closeModal(modalId);
         }
@@ -449,25 +375,26 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     
-    // 🚨 CRITICAL FIX: active class ကို ဖယ်ရှားပြီး CSS transition 0.4s စတင်ပါ
+    // 1. Active Class ကို ဖယ်ရှားပါ (CSS ကနေ pointer-events: none, opacity: 0 ဖြစ်စေမည်)
     modal.classList.remove('active');
     
-    // 0.4s စောင့်ပြီးမှ pointer-events ကို လုံးဝပြန်ဖွင့်ရန် body scroll logic ကို ထည့်သွင်းထားသည်
+    // 2. Overlay Click Listener ကို ရှင်းလင်းပါ
+    modal.onclick = null; 
+
+    // 3. 0.3s စောင့်ပြီးမှ (CSS Transition time) UI state များကို ပြန်စစ်ဆေးပါ
     setTimeout(() => {
-        // အခြား Modal တစ်ခုခု ပွင့်နေသေးရင် scroll ကို မဖွင့်ပါ
+        // 🚨 CRITICAL CHECK: အခြား Modal တစ်ခုခု ပွင့်နေသေးရင် body scroll ကို မဖွင့်ပါ
         if (!document.querySelector('.modal-overlay.active')) {
              document.body.style.overflow = '';
         }
        
+        // Home Screen မှာရှိပြီး Admin ဖြစ်မှ FAB ကို ပြန်ပြပါ
         const homeScreen = document.getElementById('home-screen');
         if (homeScreen && homeScreen.classList.contains('active') && is_admin) {
             const fab = document.getElementById('post-add-button');
             if (fab) fab.style.display = 'flex'; 
         }
-        
-        // Overlay Click Listener ကို ရှင်းလင်းပါ
-        modal.onclick = null; 
-    }, 400); 
+    }, 300); // CSS Transition duration (0.3s)
 }
 
 function updateMusicStatus(isPlaying) { 
@@ -603,7 +530,7 @@ function addMusicEventListeners() {
 
 
 // ===========================================
-//          MAIN ENTRY (unchanged)
+//          MAIN ENTRY
 // ===========================================
 
 function updateProfileDisplay(userId, fullName, username, is_admin) { 

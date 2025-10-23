@@ -328,12 +328,97 @@ function setupAdminPostLogic(isAdmin) {
                         submitPostBtn.textContent = 'Post Now';
                     });
             };
+        }// *****************************************************************
+// ZZ Feed - Telegram Mini App Script (FINAL FIX: Posting Error Handling)
+// *****************************************************************
+
+// ... (Previous code remains the same until setupAdminPostLogic)
+
+// ===========================================
+//          ADMIN POST LOGIC (Posting Error Final Fix)
+// ===========================================
+
+function setupAdminPostLogic(isAdmin) { 
+    const postAddButton = document.getElementById('post-add-button');
+    const submitPostBtn = document.getElementById('submit-post-btn');
+    const cancelPostBtn = document.getElementById('cancel-post-btn');
+    const postInput = document.getElementById('post-input');
+
+    if (isAdmin) {
+        if (postAddButton) postAddButton.style.display = 'flex';
+        if (postAddButton) postAddButton.onclick = () => openModal('post-modal');
+        if (cancelPostBtn) { 
+            cancelPostBtn.onclick = () => {
+                postInput.value = ''; 
+                closeModal('post-modal');
+            };
+        }
+
+        if (submitPostBtn && postInput) {
+            submitPostBtn.onclick = () => {
+                // 🚨 CRITICAL CHECK: Database ready ရှိမရှိ စစ်ပါ
+                if (!window.db) {
+                    showToast("Error: Database not initialized. Check Firebase config in index.html.");
+                    closeModal('post-modal');
+                    return;
+                }
+                if (!isAdminUser(currentUserId)) {
+                     showToast("Error: Authorization failed. You are not recognized as Admin.");
+                     closeModal('post-modal');
+                     return;
+                }
+                
+                const content = postInput.value.trim();
+                
+                if (content.length < 5 || content.length > 500) {
+                    showToast("Post must be between 5 and 500 characters.");
+                    return;
+                }
+                
+                // Posting state ကို စတင်ပါ
+                submitPostBtn.disabled = true;
+                submitPostBtn.textContent = 'Posting...';
+
+                const newPost = {
+                    authorId: currentUserId,
+                    authorName: currentUserName || 'Admin', 
+                    isAdmin: true,
+                    content: content,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(), 
+                };
+                
+                window.db.collection(POSTS_COLLECTION).add(newPost)
+                    .then(() => {
+                        postInput.value = ''; 
+                        
+                        // New Post တင်ပြီးရင် Feed ကို New Posts Tab ကို ပြန်ပြောင်းပါ
+                        const newPostsTab = document.getElementById('new-posts-tab');
+                        if (newPostsTab) {
+                           newPostsTab.click(); 
+                        }
+                        
+                        closeModal('post-modal'); 
+                        showToast("Announcement posted successfully!");
+                    })
+                    .catch(error => {
+                        // 🚨 ERROR CATCH: Database Error ကို ဖမ်းပြီး User ကို ပြပါ
+                        console.error("Error writing document (Check Security Rules): ", error);
+                        showToast(`Posting Failed! (Check Console & Security Rules): ${error.message}`);
+                    })
+                    .finally(() => {
+                        // 🚨 FINAL FIX: အခြေအနေမကောင်းရင်တောင် Button ကို ပြန်ဖွင့်ပေးပါ
+                        submitPostBtn.disabled = false;
+                        submitPostBtn.textContent = 'Post Now';
+                    });
+            };
         }
     } else {
         if (postAddButton) postAddButton.style.display = 'none';
         if (postAddButton) postAddButton.onclick = null;
     }
 }
+
+// ... (The rest of the tma-script.js code remains the same)
 
 
 // ===========================================

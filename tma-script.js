@@ -303,34 +303,64 @@ function setupAdminPostLogic(isAdmin) {
 }
 
 
+// ===========================================// *****************************************************************
+// ZZ Feed - Telegram Mini App Script (FINAL FULL FIX: Clickability Lock Removed)
+// *****************************************************************
+
+// ... (Previous code remains the same until MODAL & MUSIC LOGIC)
+
 // ===========================================
-//          MODAL & MUSIC LOGIC (Music Playback FINAL FIX)
+//          MODAL & MUSIC LOGIC (CRITICAL FINAL FIX)
 // ===========================================
 
 function openModal(modalId) { 
     const modal = document.getElementById(modalId);
     if (!modal) return;
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    requestAnimationFrame(() => modal.classList.add('active'));
+    
+    // 🚨 FIX: active class ထည့်ပြီး CSS ကနေ visibility/opacity ကို ဖွင့်ပါ
+    document.body.style.overflow = 'hidden'; // နောက်ခံ scroll မရအောင်
+    modal.classList.add('active');
+
+    // Home screen မှာရှိရင် FAB ကို ဖျောက်ပါ
     const fab = document.getElementById('post-add-button');
     if (fab) fab.style.display = 'none'; 
+    
+    // modal overlay ကို နှိပ်ပြီး ပိတ်မယ့် logic ကို ဒီမှာ ထပ်ထည့်ပေးလိုက်ပါ
+    modal.onclick = (e) => {
+        // modal content ကို နှိပ်တာ မဟုတ်ရင် ပိတ်ပါ
+        if (e.target.id === modalId) {
+            closeModal(modalId);
+        }
+    };
 }
 
 function closeModal(modalId) { 
     const modal = document.getElementById(modalId);
     if (!modal) return;
+    
+    // 🚨 FIX: active class ကို ဖယ်ရှားပြီး CSS transition 0.4s စတင်ပါ
     modal.classList.remove('active');
+    
+    // FAB ကို ပြန်ပြဖို့နဲ့ body scroll ကို ပြန်ဖွင့်ဖို့ 0.4s စောင့်ပါ
     setTimeout(() => {
-        modal.style.display = 'none';
-        document.body.style.overflow = '';
+        // စစ်ဆေးပြီးမှ ပြန်ဖွင့်ပါ
+        if (!document.querySelector('.modal-overlay.active')) {
+             document.body.style.overflow = '';
+        }
+       
         const homeScreen = document.getElementById('home-screen');
         if (homeScreen && homeScreen.classList.contains('active') && is_admin) {
             const fab = document.getElementById('post-add-button');
             if (fab) fab.style.display = 'flex'; 
         }
-    }, 400); 
+        
+        modal.onclick = null; // Listener ရှင်းလင်းပါ
+    }, 400); // 400ms = CSS transition duration
 }
+
+// ... (toggleVolume, setupMusicPlayer, setMusicUrl, addMusicEventListeners များ ယခင်အတိုင်း ထားပါ)
+// ... (The rest of the tma-script.js code remains the same)
+
 
 function updateMusicStatus(isPlaying) { 
     if (!musicStatusSpan || !volumeToggleIcon) return;

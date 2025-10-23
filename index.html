@@ -2,225 +2,191 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Single-File Real-Time Chat App</title>
-    <!-- Load Tailwind CSS CDN for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, onSnapshot, collection, query, orderBy, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZZ Feed (Community Posts)</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <!-- CSS File -->
+    <link rel="stylesheet" href="tma-style.css">
 
-        // Global variables provided by the Canvas environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        let db, auth, userId = 'Initializing...';
-        
-        // Custom Tailwind Configuration
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'primary-blue': '#4c6ef5',
-                        'secondary-gray': '#e9ecef',
-                        'dark-bg': '#1e293b',
-                        'dark-card': '#334155',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    }
-                }
-            }
-        }
-
-        /**
-         * Utility function to escape HTML for security against XSS.
-         * @param {string} str The string to escape.
-         * @returns {string} The escaped string.
-         */
-        function escapeHTML(str) {
-            return str.replace(/&/g, '&amp;')
-                      .replace(/</g, '&lt;')
-                      .replace(/>/g, '&gt;')
-                      .replace(/"/g, '&quot;')
-                      .replace(/'/g, '&#39;');
-        }
-
-        /**
-         * Sets up Firebase services, handles authentication, and starts listeners.
-         */
-        async function setupFirebase() {
-            try {
-                // 1. Initialize Firebase
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                setLogLevel('Debug'); // Enable debug logging for Firebase
-
-                // 2. Handle Authentication
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        document.getElementById('user-id-display').textContent = `User ID: ${userId}`;
-                        // Start listening for messages only after authentication is complete
-                        listenForMessages();
-                    } else {
-                        // Sign in using custom token or anonymously
-                        if (initialAuthToken) {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                            await signInAnonymously(auth);
-                            userId = auth.currentUser?.uid || 'anonymous';
-                            document.getElementById('user-id-display').textContent = `User ID: ${userId}`;
-                            listenForMessages();
-                        }
-                    }
-                });
-
-            } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                document.getElementById('chat-messages').innerHTML = `<p class="text-red-500 p-4">Error loading chat: ${error.message}</p>`;
-            }
-        }
-        
-        /**
-         * Listens to the Firestore collection and updates the UI in real-time.
-         */
-        function listenForMessages() {
-            if (!db || !auth.currentUser) {
-                console.warn("Database or User not ready for listening.");
-                return;
-            }
-
-            const chatMessagesRef = collection(db, `artifacts/${appId}/public/data/chat_messages`);
-            const q = query(chatMessagesRef, orderBy("timestamp", "asc"));
-            
-            const messagesList = document.getElementById('chat-messages');
-
-            onSnapshot(q, (snapshot) => {
-                messagesList.innerHTML = ''; // Clear existing messages
-                snapshot.docs.forEach(doc => {
-                    const message = doc.data();
-                    const isCurrentUser = message.userId === auth.currentUser.uid;
-                    const messageClass = isCurrentUser ? 'bg-primary-blue text-white self-end rounded-br-none' : 'bg-dark-card text-white self-start rounded-tl-none';
-                    const timeString = message.timestamp ? new Date(message.timestamp.toDate()).toLocaleTimeString() : '...';
-
-                    messagesList.innerHTML += `
-                        <div class="flex flex-col max-w-[80%] mb-3 p-3 rounded-xl shadow-lg ${messageClass}">
-                            <div class="text-xs opacity-75 mb-1 ${isCurrentUser ? 'text-right' : 'text-left'}">
-                                ${isCurrentUser ? 'You' : escapeHTML(message.userId).substring(0, 8)}...
-                            </div>
-                            <p class="break-words text-base">${escapeHTML(message.text)}</p>
-                            <span class="text-[0.6rem] opacity-50 mt-1 ${isCurrentUser ? 'text-left' : 'text-right'}">${timeString}</span>
-                        </div>
-                    `;
-                });
-                // Scroll to the latest message
-                messagesList.scrollTop = messagesList.scrollHeight;
-            }, (error) => {
-                console.error("Error listening to messages:", error);
-            });
-        }
-
-        /**
-         * Handles sending a new message to Firestore.
-         * @param {Event} e The form submission event.
-         */
-        async function sendMessage(e) {
-            e.preventDefault();
-            const inputField = document.getElementById('message-input');
-            const text = inputField.value.trim();
-
-            if (!text || !db || !auth.currentUser) {
-                inputField.value = '';
-                return;
-            }
-
-            try {
-                const chatMessagesRef = collection(db, `artifacts/${appId}/public/data/chat_messages`);
-                await addDoc(chatMessagesRef, {
-                    text: text,
-                    userId: auth.currentUser.uid,
-                    timestamp: serverTimestamp()
-                });
-                inputField.value = ''; // Clear input after sending
-            } catch (error) {
-                console.error("Error sending message:", error);
-                // Display error to user (using a custom div, not alert)
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'text-red-400 text-center mt-2';
-                errorDiv.textContent = 'Failed to send message.';
-                document.getElementById('message-form').appendChild(errorDiv);
-                setTimeout(() => errorDiv.remove(), 3000);
-            }
-        }
-        
-        // Attach the send handler to the form
-        window.onload = function() {
-            setupFirebase();
-            document.getElementById('message-form').addEventListener('submit', sendMessage);
-        };
-    </script>
-    <style>
-        /* Custom CSS for height control and font */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0f172a; /* Slate-900 equivalent */
-        }
-        #app-container {
-            height: 100vh;
-            max-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        #chat-messages {
-            flex-grow: 1;
-            overflow-y: auto;
-            scroll-behavior: smooth;
-        }
-    </style>
+    <!-- Telegram Web App SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 
-<div id="app-container" class="w-full max-w-lg mx-auto shadow-2xl rounded-lg overflow-hidden border border-gray-700">
+    <div class="app-container">
+        
+        <div class="fixed-header-area">
+            <header>
+                <div class="music-info-area">
+                    <span id="current-music-status">Music Paused (Tap Icon to Play)</span>
+                    <i id="volume-toggle" class="fas fa-volume-off" title="Start Playing Music"></i>
+                </div>
+                <button id="music-button" class="icon-btn" aria-label="Music Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </header>
+            
+            <div class="filter-tabs" role="tablist">
+                <button id="new-posts-tab" class="filter-tab active" data-filter="new-posts" role="tab" aria-selected="true">
+                    🔥 New Posts
+                </button>
+                <button class="filter-tab" data-filter="old-posts" role="tab" aria-selected="false">
+                    ⏳ Oldest
+                </button>
+            </div>
+        </div>
 
-    <!-- Header -->
-    <header class="p-4 bg-dark-bg border-b border-gray-700 text-white shadow-md">
-        <h1 class="text-2xl font-bold text-primary-blue text-center">Real-Time Canvas Chat</h1>
-        <p id="user-id-display" class="text-xs text-gray-400 mt-1 text-center truncate">User ID: Initializing...</p>
-    </header>
+        <div class="content">
+            
+            <div id="home-screen" class="screen active">
+                <div id="posts-container" class="posts-list">
+                    <p class="initial-loading-text">Loading posts...</p>
+                </div>
+            </div>
 
-    <!-- Message Display Area -->
-    <div id="chat-messages" class="p-4 flex flex-col bg-dark-bg">
-        <!-- Messages will be loaded here by JavaScript -->
-        <div class="text-center text-gray-500 mt-10">Loading chat history...</div>
+            <div id="profile-screen" class="screen">
+                <div class="profile-card">
+                    <div id="profile-avatar-placeholder" class="avatar-placeholder">U</div>
+                    <h2 id="profile-display-name">Loading...</h2>
+                    <p id="profile-display-username" class="hint-text">Username N/A</p>
+                    <span id="admin-status" class="admin-badge">Regular User</span>
+
+                    <div class="info-row">
+                        <span>Telegram Chat ID:</span>
+                        <div class="copy-area">
+                            <span id="telegram-chat-id">0</span>
+                            <button id="chat-id-copy-btn" class="icon-btn" aria-label="Copy User ID">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button id="tma-close-btn" class="close-app-btn">
+                        <i class="fas fa-times-circle"></i> Close Mini App
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-screen="home-screen" aria-label="Home Feed">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </button>
+            <button class="nav-item" data-screen="profile-screen" aria-label="Profile">
+                <i class="fas fa-user"></i>
+                <span>Profile</span>
+            </button>
+        </nav>
+        
+        <button id="post-add-button" class="fab" aria-label="Add New Post" style="display:none;">
+            <i class="fas fa-plus"></i>
+        </button>
     </div>
 
-    <!-- Input Form -->
-    <form id="message-form" class="p-4 bg-dark-bg border-t border-gray-700 flex space-x-3">
-        <input 
-            type="text" 
-            id="message-input" 
-            placeholder="Type your message..." 
-            class="flex-grow p-3 rounded-full bg-dark-card text-white border border-gray-600 focus:ring-2 focus:ring-primary-blue focus:border-primary-blue transition duration-200"
-            autocomplete="off"
-            required
-        />
-        <button 
-            type="submit" 
-            class="bg-primary-blue text-white p-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200 shadow-lg active:scale-95 transform"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-        </button>
-    </form>
+    <!-- Modals -->
+    <div id="post-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Create New Post</h3>
+            <textarea id="post-input" placeholder="Type your announcement (5-500 chars)" maxlength="500"></textarea>
+            <div class="modal-actions">
+                <button id="cancel-post-btn" class="modal-cancel-btn">Cancel</button>
+                <button id="submit-post-btn" class="modal-submit-btn">Post Now</button>
+            </div>
+        </div>
+    </div>
 
-</div>
+    <div id="music-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Music Settings</h3>
+            <p class="hint-text">Choose your background audio source.</p>
+            <div class="music-option-list">
+                <button class="music-option" data-music-type="default">
+                    <i class="fas fa-headphones"></i> Use Default Lofi
+                </button>
+                <button class="music-option" data-music-type="url">
+                    <i class="fas fa-link"></i> Use Custom URL
+                </button>
+                <label for="music-upload-input" class="music-option">
+                    <i class="fas fa-upload"></i> Upload Local File (.mp3)
+                </label>
+                <input type="file" id="music-upload-input" accept="audio/mp3,audio/*" style="display: none;">
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-music-modal-btn" class="modal-cancel-btn full-width">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="url-input-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Custom Music URL</h3>
+            <input type="url" id="music-url-input" placeholder="Enter HTTP/HTTPS audio link">
+            <div class="modal-actions">
+                <button id="close-url-modal-btn" class="modal-cancel-btn">Back</button>
+                <button id="play-url-btn" class="modal-submit-btn">Set & Play</button>
+            </div>
+        </div>
+    </div>
 
+    <audio id="audio-player" style="display:none;"></audio>
+
+    <div id="custom-toast" class="custom-toast"></div>
+
+    <!-- Firebase Initialization and Setup -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Variables from Canvas Environment (MANDATORY USE)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        if (firebaseConfig) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                const db = getFirestore(app);
+                const auth = getAuth(app);
+                setLogLevel('error'); // Set log level to reduce console noise
+
+                // Globalizing Firebase instances for tma-script.js
+                window.app = app;
+                window.db = db;
+                window.auth = auth;
+                window.appId = appId; // Pass app ID globally
+
+                // Authentication using Canvas Token or Anonymous Sign-in
+                if (initialAuthToken) {
+                    signInWithCustomToken(auth, initialAuthToken).then(userCredential => {
+                        console.log("Firebase signed in with custom token.", userCredential.user.uid);
+                    }).catch(error => {
+                        console.error("Custom token sign-in failed:", error);
+                        signInAnonymously(auth).then(() => console.log("Signed in anonymously (Fallback)."));
+                    });
+                } else {
+                    // Fallback to anonymous sign-in if no custom token is present
+                    signInAnonymously(auth).then(() => console.log("Signed in anonymously."));
+                }
+
+                // Start the main application script only after basic Firebase setup
+                const script = document.createElement('script');
+                script.src = 'tma-script.js';
+                document.body.appendChild(script);
+
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                document.getElementById('posts-container').innerHTML = '<p class="initial-loading-text" style="color:red;">❌ Firebase initialization failed. Check console for details.</p>';
+            }
+        } else {
+            console.error("Firebase config is missing.");
+            document.getElementById('posts-container').innerHTML = '<p class="initial-loading-text" style="color:red;">❌ Firebase Configuration is missing.</p>';
+        }
+
+    </script>
 </body>
 </html>
 

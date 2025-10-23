@@ -2,1354 +2,225 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ZZ Feed (Community Posts)</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single-File Real-Time Chat App</title>
+    <!-- Load Tailwind CSS CDN for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    
-    <!-- Telegram Web App Script -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Load Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, onSnapshot, collection, query, orderBy, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // Global variables provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth, userId = 'Initializing...';
+        
+        // Custom Tailwind Configuration
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-blue': '#4c6ef5',
+                        'secondary-gray': '#e9ecef',
+                        'dark-bg': '#1e293b',
+                        'dark-card': '#334155',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+
+        /**
+         * Utility function to escape HTML for security against XSS.
+         * @param {string} str The string to escape.
+         * @returns {string} The escaped string.
+         */
+        function escapeHTML(str) {
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;')
+                      .replace(/'/g, '&#39;');
+        }
+
+        /**
+         * Sets up Firebase services, handles authentication, and starts listeners.
+         */
+        async function setupFirebase() {
+            try {
+                // 1. Initialize Firebase
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); // Enable debug logging for Firebase
+
+                // 2. Handle Authentication
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('user-id-display').textContent = `User ID: ${userId}`;
+                        // Start listening for messages only after authentication is complete
+                        listenForMessages();
+                    } else {
+                        // Sign in using custom token or anonymously
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                            userId = auth.currentUser?.uid || 'anonymous';
+                            document.getElementById('user-id-display').textContent = `User ID: ${userId}`;
+                            listenForMessages();
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                document.getElementById('chat-messages').innerHTML = `<p class="text-red-500 p-4">Error loading chat: ${error.message}</p>`;
+            }
+        }
+        
+        /**
+         * Listens to the Firestore collection and updates the UI in real-time.
+         */
+        function listenForMessages() {
+            if (!db || !auth.currentUser) {
+                console.warn("Database or User not ready for listening.");
+                return;
+            }
+
+            const chatMessagesRef = collection(db, `artifacts/${appId}/public/data/chat_messages`);
+            const q = query(chatMessagesRef, orderBy("timestamp", "asc"));
+            
+            const messagesList = document.getElementById('chat-messages');
+
+            onSnapshot(q, (snapshot) => {
+                messagesList.innerHTML = ''; // Clear existing messages
+                snapshot.docs.forEach(doc => {
+                    const message = doc.data();
+                    const isCurrentUser = message.userId === auth.currentUser.uid;
+                    const messageClass = isCurrentUser ? 'bg-primary-blue text-white self-end rounded-br-none' : 'bg-dark-card text-white self-start rounded-tl-none';
+                    const timeString = message.timestamp ? new Date(message.timestamp.toDate()).toLocaleTimeString() : '...';
+
+                    messagesList.innerHTML += `
+                        <div class="flex flex-col max-w-[80%] mb-3 p-3 rounded-xl shadow-lg ${messageClass}">
+                            <div class="text-xs opacity-75 mb-1 ${isCurrentUser ? 'text-right' : 'text-left'}">
+                                ${isCurrentUser ? 'You' : escapeHTML(message.userId).substring(0, 8)}...
+                            </div>
+                            <p class="break-words text-base">${escapeHTML(message.text)}</p>
+                            <span class="text-[0.6rem] opacity-50 mt-1 ${isCurrentUser ? 'text-left' : 'text-right'}">${timeString}</span>
+                        </div>
+                    `;
+                });
+                // Scroll to the latest message
+                messagesList.scrollTop = messagesList.scrollHeight;
+            }, (error) => {
+                console.error("Error listening to messages:", error);
+            });
+        }
+
+        /**
+         * Handles sending a new message to Firestore.
+         * @param {Event} e The form submission event.
+         */
+        async function sendMessage(e) {
+            e.preventDefault();
+            const inputField = document.getElementById('message-input');
+            const text = inputField.value.trim();
+
+            if (!text || !db || !auth.currentUser) {
+                inputField.value = '';
+                return;
+            }
+
+            try {
+                const chatMessagesRef = collection(db, `artifacts/${appId}/public/data/chat_messages`);
+                await addDoc(chatMessagesRef, {
+                    text: text,
+                    userId: auth.currentUser.uid,
+                    timestamp: serverTimestamp()
+                });
+                inputField.value = ''; // Clear input after sending
+            } catch (error) {
+                console.error("Error sending message:", error);
+                // Display error to user (using a custom div, not alert)
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'text-red-400 text-center mt-2';
+                errorDiv.textContent = 'Failed to send message.';
+                document.getElementById('message-form').appendChild(errorDiv);
+                setTimeout(() => errorDiv.remove(), 3000);
+            }
+        }
+        
+        // Attach the send handler to the form
+        window.onload = function() {
+            setupFirebase();
+            document.getElementById('message-form').addEventListener('submit', sendMessage);
+        };
+    </script>
     <style>
-        /* -------------------------------------- */
-        /* ZZ Feed - Custom CSS (EMBEDDED) */
-        /* -------------------------------------- */
-        :root {
-            /* Default fallback values, will be overridden by Telegram theme in JS */
-            --tg-theme-bg-color: #0d1117; 
-            --tg-theme-secondary-bg-color: #1a202c;
-            --tg-theme-text-color: #ffffff;
-            --tg-theme-link-color: #20b2aa; 
-            --tg-theme-button-color: #4caf50; 
-            --tg-theme-button-text-color: #ffffff;
-            --tg-theme-destructive-text-color: #ff9800; 
-            --tg-theme-hint-color: #bdbdbd; 
-            --border-radius-main: 12px;
-            --spacing-unit: 16px;
-            --fab-size: 56px;
-            --nav-height: 60px;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        /* Custom CSS for height control and font */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--tg-theme-bg-color);
-            color: var(--tg-theme-text-color);
-            -webkit-tap-highlight-color: transparent;
-            /* Ensure the body takes full height and scrolls if content exceeds viewport */
-            min-height: 100vh; 
+            background-color: #0f172a; /* Slate-900 equivalent */
         }
-
-        .app-container {
+        #app-container {
             height: 100vh;
+            max-height: 100vh;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
         }
-
-        /* -------------------------------------- */
-        /* Header & Navigation */
-        /* -------------------------------------- */
-        .fixed-header-area {
-            position: sticky;
-            top: 0;
-            z-index: 10; 
-            background-color: var(--tg-theme-bg-color);
-            padding-bottom: 5px; 
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            transition: all 0.2s ease-in-out;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: var(--spacing-unit);
-            padding-bottom: 0;
-        }
-
-        .music-info-area {
-            display: flex;
-            align-items: center;
-            background-color: var(--tg-theme-secondary-bg-color);
-            border-radius: var(--border-radius-main);
-            padding: 8px 12px;
-            font-size: 0.9rem;
-            cursor: pointer; 
-        }
-
-        #volume-toggle {
-            font-size: 1.1rem;
-            color: var(--tg-theme-link-color);
-            padding: 0;
-            margin-left: 5px;
-        }
-
-        .icon-btn {
-            background: none;
-            border: none;
-            color: var(--tg-theme-link-color);
-            cursor: pointer;
-            padding: 8px;
-            font-size: 1.2rem;
-            border-radius: 50%;
-            transition: background-color 0.2s;
-        }
-
-        .filter-tabs {
-            display: flex;
-            justify-content: space-around;
-            padding: 0 var(--spacing-unit);
-            margin-top: 10px;
-            gap: 8px;
-        }
-
-        .filter-tab {
-            flex-grow: 1;
-            background-color: var(--tg-theme-secondary-bg-color);
-            color: var(--tg-theme-hint-color);
-            border: none;
-            padding: 8px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s ease-in-out;
-            white-space: nowrap;
-        }
-
-        .filter-tab.active {
-            background-color: var(--tg-theme-link-color);
-            color: var(--tg-theme-button-text-color);
-            box-shadow: 0 2px 5px rgba(32, 178, 170, 0.5);
-        }
-
-        .bottom-nav {
-            display: flex;
-            justify-content: space-around;
-            background-color: var(--tg-theme-secondary-bg-color);
-            height: var(--nav-height);
-            box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.2);
-            z-index: 15; 
-        }
-
-        .nav-item {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 5px 0;
-            background: none;
-            border: none;
-            color: var(--tg-theme-hint-color);
-            cursor: pointer;
-            transition: color 0.2s;
-        }
-
-        .nav-item i {
-            font-size: 1.3rem;
-        }
-
-        .nav-item span {
-            font-size: 0.7rem;
-            margin-top: 2px;
-        }
-
-        .nav-item.active {
-            color: var(--tg-theme-link-color);
-        }
-
-        /* -------------------------------------- */
-        /* Content & Screens */
-        /* -------------------------------------- */
-        .content {
+        #chat-messages {
             flex-grow: 1;
             overflow-y: auto;
-            padding: 20px var(--spacing-unit); 
-            padding-bottom: calc(var(--nav-height) + 20px); 
-            -webkit-overflow-scrolling: touch;
             scroll-behavior: smooth;
-        }
-
-        .screen {
-            display: none;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        .screen.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .posts-list {
-            display: flex;
-            flex-direction: column;
-            gap: var(--spacing-unit);
-        }
-
-        .post-card {
-            background-color: var(--tg-theme-secondary-bg-color);
-            padding: var(--spacing-unit);
-            border-radius: var(--border-radius-main);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .post-card .admin-badge {
-            display: inline-block;
-            background-color: var(--tg-theme-link-color); 
-            color: var(--tg-theme-button-text-color);
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .post-content {
-            font-size: 1.1rem;
-            line-height: 1.5;
-            margin-bottom: 12px;
-            white-space: pre-wrap; 
-        }
-
-        .post-actions {
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .like-btn, .delete-btn {
-            background: none;
-            border: 1px solid var(--tg-theme-hint-color);
-            color: var(--tg-theme-hint-color);
-            padding: 6px 12px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .like-btn.liked {
-            background-color: var(--tg-theme-link-color);
-            border-color: var(--tg-theme-link-color);
-            color: var(--tg-theme-button-text-color);
-        }
-
-        .delete-btn {
-            border-color: var(--tg-theme-destructive-text-color);
-            color: var(--tg-theme-destructive-text-color);
-        }
-
-        .profile-card {
-            background-color: var(--tg-theme-secondary-bg-color);
-            padding: var(--spacing-unit);
-            border-radius: var(--border-radius-main);
-            text-align: center;
-            margin-top: 40px;
-        }
-
-        .avatar-placeholder {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background-color: #555;
-            margin: -40px auto 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2rem;
-            font-weight: bold;
-            color: white;
-            overflow: hidden;
-            box-shadow: 0 0 0 4px var(--tg-theme-bg-color), 0 0 0 5px var(--tg-theme-secondary-bg-color);
-        }
-
-        .profile-card h2 {
-            margin-bottom: 5px;
-            color: var(--tg-theme-text-color);
-        }
-
-        .hint-text {
-            color: var(--tg-theme-hint-color);
-            font-size: 0.9rem;
-            margin-bottom: 15px;
-        }
-
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: var(--tg-theme-bg-color);
-            padding: 10px 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-        }
-
-        .copy-area {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        #telegram-chat-id {
-            font-family: monospace;
-            color: var(--tg-theme-link-color);
-        }
-
-        .close-app-btn {
-            width: 100%;
-            padding: 10px;
-            background-color: var(--tg-theme-destructive-text-color);
-            color: var(--tg-theme-button-text-color);
-            border: none;
-            border-radius: 8px;
-            margin-top: 20px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        /* -------------------------------------- */
-        /* FAB (Admin Post Button) */
-        /* -------------------------------------- */
-        .fab {
-            position: fixed;
-            bottom: calc(var(--nav-height) + 15px);
-            right: 20px;
-            width: var(--fab-size);
-            height: var(--fab-size);
-            border-radius: 50%;
-            background-color: var(--tg-theme-button-color); 
-            color: var(--tg-theme-button-text-color);
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-            z-index: 20; 
-            transition: transform 0.3s;
-        }
-
-        .fab:active {
-            transform: scale(0.95);
-        }
-
-        /* -------------------------------------- */
-        /* Modals & Toast */
-        /* -------------------------------------- */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            
-            pointer-events: none; 
-            visibility: hidden; 
-            opacity: 0; 
-            
-            display: flex; 
-            justify-content: center;
-            align-items: center;
-            z-index: 1000; 
-            
-            transition: opacity 0.3s ease-out, visibility 0.3s; 
-        }
-
-        .modal-overlay.active {
-            pointer-events: auto; 
-            visibility: visible; 
-            opacity: 1;
-        }
-
-        .modal-content {
-            background-color: var(--tg-theme-secondary-bg-color);
-            padding: var(--spacing-unit);
-            border-radius: var(--border-radius-main);
-            width: 90%;
-            max-width: 400px;
-            transform: translateY(20px);
-            opacity: 0;
-            transition: transform 0.3s ease-out, opacity 0.3s ease-out; 
-        }
-
-        .modal-overlay.active .modal-content {
-            transform: translateY(0);
-            opacity: 1;
-        }
-
-        .modal-content h3 {
-            margin-bottom: 15px;
-            color: var(--tg-theme-link-color);
-        }
-
-        textarea, input[type="url"] {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 15px;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background-color: var(--tg-theme-bg-color);
-            color: var(--tg-theme-text-color);
-            resize: vertical;
-            font-size: 1rem;
-        }
-
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-
-        .modal-actions .full-width {
-            width: 100%;
-            justify-content: center;
-        }
-
-        .modal-cancel-btn, .modal-submit-btn {
-            padding: 10px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            border: none;
-            transition: opacity 0.2s;
-        }
-
-        .modal-cancel-btn {
-            background: none;
-            color: var(--tg-theme-hint-color);
-        }
-
-        .modal-submit-btn {
-            background-color: var(--tg-theme-button-color); 
-            color: var(--tg-theme-button-text-color);
-        }
-
-        .music-option-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .music-option {
-            display: flex;
-            align-items: center;
-            padding: 10px;
-            background-color: var(--tg-theme-bg-color);
-            border-radius: 8px;
-            color: var(--tg-theme-text-color);
-            cursor: pointer;
-            transition: background-color 0.2s;
-            border: 1px solid var(--tg-theme-bg-color);
-        }
-
-        .music-option:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-
-        .music-option i {
-            margin-right: 10px;
-            color: var(--tg-theme-link-color);
-        }
-
-        .custom-toast {
-            visibility: hidden;
-            min-width: 250px;
-            background-color: rgba(0, 0, 0, 0.85);
-            color: #fff;
-            text-align: center;
-            border-radius: var(--border-radius-main);
-            padding: 12px;
-            position: fixed;
-            z-index: 1001; 
-            left: 50%;
-            transform: translateX(-50%);
-            bottom: 80px; 
-            font-size: 0.9rem;
-            transition: opacity 0.3s, bottom 0.3s;
-            opacity: 0;
-        }
-
-        .custom-toast.show {
-            visibility: visible;
-            opacity: 1;
-            bottom: 100px;
         }
     </style>
 </head>
 <body>
 
-    <div class="app-container">
-        
-        <div class="fixed-header-area">
-            <header>
-                <div class="music-info-area">
-                    <span id="current-music-status">Music Paused (Tap Icon to Play)</span>
-                    <i id="volume-toggle" class="fas fa-volume-off" title="Start Playing Music"></i>
-                </div>
-                <button id="music-button" class="icon-btn" aria-label="Music Settings">
-                    <i class="fas fa-cog"></i>
-                </button>
-            </header>
-            
-            <div class="filter-tabs" role="tablist">
-                <button id="new-posts-tab" class="filter-tab active" data-filter="new-posts" role="tab" aria-selected="true">
-                    🔥 New Posts
-                </button>
-                <button class="filter-tab" data-filter="old-posts" role="tab" aria-selected="false">
-                    ⏳ Oldest
-                </button>
-            </div>
-        </div>
+<div id="app-container" class="w-full max-w-lg mx-auto shadow-2xl rounded-lg overflow-hidden border border-gray-700">
 
-        <div class="content">
-            
-            <div id="home-screen" class="screen active">
-                <div id="posts-container" class="posts-list">
-                    <p class="initial-loading-text">Connecting to Firebase...</p>
-                </div>
-            </div>
+    <!-- Header -->
+    <header class="p-4 bg-dark-bg border-b border-gray-700 text-white shadow-md">
+        <h1 class="text-2xl font-bold text-primary-blue text-center">Real-Time Canvas Chat</h1>
+        <p id="user-id-display" class="text-xs text-gray-400 mt-1 text-center truncate">User ID: Initializing...</p>
+    </header>
 
-            <div id="profile-screen" class="screen">
-                <div class="profile-card">
-                    <div id="profile-avatar-placeholder" class="avatar-placeholder">U</div>
-                    <h2 id="profile-display-name">Loading...</h2>
-                    <p id="profile-display-username" class="hint-text">Username N/A</p>
-                    <span id="admin-status" class="admin-badge">Regular User</span>
+    <!-- Message Display Area -->
+    <div id="chat-messages" class="p-4 flex flex-col bg-dark-bg">
+        <!-- Messages will be loaded here by JavaScript -->
+        <div class="text-center text-gray-500 mt-10">Loading chat history...</div>
+    </div>
 
-                    <div class="info-row">
-                        <span>Telegram Chat ID:</span>
-                        <div class="copy-area">
-                            <span id="telegram-chat-id">0</span>
-                            <button id="chat-id-copy-btn" class="icon-btn" aria-label="Copy User ID">
-                                <i class="fas fa-copy"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <p class="hint-text mt-3 text-xs" id="auth-status">Auth Status: Initializing...</p>
-
-                    <button id="tma-close-btn" class="close-app-btn">
-                        <i class="fas fa-times-circle"></i> Close Mini App
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <nav class="bottom-nav">
-            <button class="nav-item active" data-screen="home-screen" aria-label="Home Feed">
-                <i class="fas fa-home"></i>
-                <span>Home</span>
-            </button>
-            <button class="nav-item" data-screen="profile-screen" aria-label="Profile">
-                <i class="fas fa-user"></i>
-                <span>Profile</span>
-            </button>
-        </nav>
-        
-        <button id="post-add-button" class="fab" aria-label="Add New Post" style="display:none;">
-            <i class="fas fa-plus"></i>
+    <!-- Input Form -->
+    <form id="message-form" class="p-4 bg-dark-bg border-t border-gray-700 flex space-x-3">
+        <input 
+            type="text" 
+            id="message-input" 
+            placeholder="Type your message..." 
+            class="flex-grow p-3 rounded-full bg-dark-card text-white border border-gray-600 focus:ring-2 focus:ring-primary-blue focus:border-primary-blue transition duration-200"
+            autocomplete="off"
+            required
+        />
+        <button 
+            type="submit" 
+            class="bg-primary-blue text-white p-3 rounded-full font-semibold hover:bg-blue-600 transition duration-200 shadow-lg active:scale-95 transform"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
         </button>
-    </div>
+    </form>
 
-    <div id="post-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h3>Create New Post</h3>
-            <textarea id="post-input" placeholder="Type your announcement (5-500 chars)" maxlength="500"></textarea>
-            <div class="modal-actions">
-                <button id="cancel-post-btn" class="modal-cancel-btn">Cancel</button>
-                <button id="submit-post-btn" class="modal-submit-btn">Post Now</button>
-            </div>
-        </div>
-    </div>
+</div>
 
-    <div id="music-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h3>Music Settings</h3>
-            <p class="hint-text">Choose your background audio source.</p>
-            <div class="music-option-list">
-                <button class="music-option" data-music-type="default">
-                    <i class="fas fa-headphones"></i> Use Default Lofi
-                </button>
-                <button class="music-option" data-music-type="url">
-                    <i class="fas fa-link"></i> Use Custom URL
-                </button>
-                <label for="music-upload-input" class="music-option">
-                    <i class="fas fa-upload"></i> Upload Local File (.mp3)
-                </label>
-                <input type="file" id="music-upload-input" accept="audio/mp3,audio/*" style="display: none;">
-            </div>
-            <div class="modal-actions">
-                <button id="cancel-music-modal-btn" class="modal-cancel-btn full-width">Close</button>
-            </div>
-        </div>
-    </div>
-    
-    <div id="url-input-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h3>Custom Music URL</h3>
-            <input type="url" id="music-url-input" placeholder="Enter HTTP/HTTPS audio link">
-            <div class="modal-actions">
-                <button id="close-url-modal-btn" class="modal-cancel-btn">Back</button>
-                <button id="play-url-btn" class="modal-submit-btn">Set & Play</button>
-            </div>
-        </div>
-    </div>
-
-    <audio id="audio-player" style="display:none;"></audio>
-
-    <div id="custom-toast" class="custom-toast"></div>
-
-    <script type="module">
-        // *** 1. FIREBASE & AUTH SETUP (CRITICAL FIX FOR WRITE ERRORS) ***
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, orderBy, onSnapshot, doc, getDoc, deleteDoc, addDoc, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Mandatory Firebase Setup using Canvas Global Variables
-        setLogLevel('debug'); // Enable Firestore logs
-
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        // *** 2. GLOBAL VARIABLES ***
-        // Firestore Collection Paths (Updated to comply with security rules for public data)
-        const POSTS_COLLECTION_PATH = `/artifacts/${appId}/public/data/tma_zzfeed_posts`;
-        const LIKES_COLLECTION_PATH = `/artifacts/${appId}/public/data/tma_zzfeed_likes`;
-        
-        const TEMP_MUSIC_KEY = 'tma_temp_music_url_v5';
-        const INITIAL_DEFAULT_URL = 'https://archive.org/download/lofi-chill-1-20/lofi_chill_03_-_sleepwalker.mp3'; 
-        
-        let audioPlayer;
-        let musicStatusSpan;
-        let volumeToggleIcon;
-        let currentUserId = 0; 
-        let currentUserName = 'Guest';
-        let currentUserUsername = 'anonymous'; 
-        let is_admin = false; 
-        let currentPostFilter = 'new-posts'; 
-        let isMusicMuted = false; 
-        let tg = null;
-        let unsubscribeFromPosts = null; 
-
-        // ********** SET YOUR ADMIN CHAT ID(s) HERE **********
-        const ADMIN_CHAT_IDS = [ 
-            1924452453, // Replace with your actual ID
-            6440295843, 
-            6513916873, 
-        ]; 
-        // *************************************************
-
-        // ===========================================
-        //          HELPER FUNCTIONS
-        // ===========================================
-        function showToast(message) { 
-            const toast = document.getElementById('custom-toast');
-            if (!toast) return;
-            clearTimeout(toast.timeoutId);
-            toast.textContent = message;
-            toast.classList.add('show');
-            toast.timeoutId = setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-            if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-        }
-
-        function isAdminUser(userId) {
-            return ADMIN_CHAT_IDS.includes(parseInt(userId));
-        }
-
-        function stringToColor(str) { 
-            let hash = 0; for (let i = 0; i < str.length; i++) { hash = str.charCodeAt(i) + ((hash << 5) - hash); }
-            let color = '#';
-            for (let i = 0; i < 3; i++) {
-                const value = (hash >> (i * 8)) & 0xFF;
-                const brightened = Math.floor(value * 0.7 + 0x55); 
-                color += ('00' + brightened.toString(16)).substr(-2);
-            }
-            return color;
-        }
-
-        function copyToClipboard(text, successMsg = 'Copied successfully.') { 
-            // Simplified copy for iframe compatibility
-            const tempInput = document.createElement('textarea');
-            tempInput.value = text;
-            tempInput.style.position = 'absolute';
-            tempInput.style.left = '-9999px';
-            document.body.appendChild(tempInput);
-            tempInput.select();
-            tempInput.setSelectionRange(0, 99999); 
-            try {
-                document.execCommand('copy');
-                showToast(successMsg);
-            } catch (err) {
-                showToast('Copy failed, please select and copy manually.');
-            }
-            document.body.removeChild(tempInput);
-        }
-
-        // ===========================================
-        //          DATA/STORAGE HANDLERS
-        // ===========================================
-
-        function loadPostsRealtime(userId) { 
-            if (!db) {
-                const container = document.getElementById('posts-container');
-                if(container) container.innerHTML = '<p class="initial-loading-text" style="color:var(--tg-theme-destructive-text-color);">❌ Database Not Ready. Check console for Firebase connection errors.</p>';
-                return;
-            }
-            if (unsubscribeFromPosts) { unsubscribeFromPosts(); }
-            const container = document.getElementById('posts-container');
-            if (!container) return;
-            container.innerHTML = '<p class="initial-loading-text">Connecting to server...</p>';
-
-            let postsCollection = collection(db, POSTS_COLLECTION_PATH);
-            const sortField = 'timestamp';
-            const sortDirection = currentPostFilter === 'new-posts' ? 'desc' : 'asc';
-            
-            let postsQuery = query(postsCollection, orderBy(sortField, sortDirection));
-
-            unsubscribeFromPosts = onSnapshot(postsQuery, async (snapshot) => {
-                const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                container.innerHTML = ''; 
-                
-                if (posts.length === 0) {
-                    container.innerHTML = '<p class="initial-loading-text">No posts found yet. Be the first to post!</p>';
-                } else {
-                    const postElements = await Promise.all(posts.map(post => createPostElement(post, userId)));
-                    postElements.forEach(el => container.appendChild(el));
-                }
-                addPostEventListeners(userId); 
-            }, error => {
-                console.error("Error listening to posts:", error);
-                container.innerHTML = '<p class="initial-loading-text" style="color:var(--tg-theme-destructive-text-color);">❌ Failed to load posts from server. Check Security Rules or console logs.</p>';
-                showToast("Error connecting to database.");
-            });
-        }
-
-        async function toggleLike(e, userId) { 
-            if (!db) { showToast("Database not ready."); return; }
-            const likeButton = e.currentTarget;
-            const postId = likeButton.getAttribute('data-post-id');
-            const likeDocRef = doc(db, LIKES_COLLECTION_PATH, `${postId}_${userId.toString()}`);
-            
-            try {
-                const docSnap = await getDoc(likeDocRef);
-                let change = 0;
-                let isLikedNow = false;
-
-                if (docSnap.exists()) {
-                    await deleteDoc(likeDocRef);
-                    change = -1;
-                    isLikedNow = false;
-                    showToast("Unliked.");
-                } else {
-                    const newLike = { 
-                        postId: postId, 
-                        userId: userId.toString(), 
-                        timestamp: serverTimestamp() 
-                    };
-                    await setDoc(likeDocRef, newLike); // Use setDoc for specific ID
-                    change = 1;
-                    isLikedNow = true;
-                    showToast("Liked!");
-                }
-                // Note: The UI count is updated manually here for immediate feedback, 
-                // but the next snapshot from loadPostsRealtime will update the true count.
-                updateLikeCountDisplay(likeButton, change, isLikedNow); 
-            } catch (error) {
-                console.error("Error toggling like (Check Security Rules):", error);
-                showToast("Action failed. Try again.");
-            }
-        }
-
-        function updateLikeCountDisplay(likeButton, change, isLikedNow) {
-            const currentCountText = likeButton.textContent.replace(/[^0-9]/g, ''); 
-            let currentCount = parseInt(currentCountText) || 0;
-            const newCount = Math.max(0, currentCount + change);
-            likeButton.innerHTML = `<i class="fas fa-heart"></i> ${newCount}`;
-            likeButton.classList.toggle('liked', isLikedNow);
-        }
-
-        async function getPostLikeCount(postId) {
-            if (!db) return 0;
-            try {
-                // Using an onSnapshot listener here for the count is complex due to the component structure.
-                // Since Firestore doesn't support easy count retrieval in security rules, 
-                // we'll rely on the main onSnapshot refreshing the list. This function 
-                // is only used for the initial count display.
-                const likesCollectionRef = collection(db, LIKES_COLLECTION_PATH);
-                const likesQuery = query(likesCollectionRef, orderBy('timestamp', 'desc')); // Cannot use where('postId', '==', postId) without index, so we fetch all and filter in memory if necessary, or just rely on the document IDs being unique.
-
-                // For a more efficient count, we must use the specific document structure and aggregation:
-                // Since the like document ID is `${postId}_${userId}`, we can't efficiently count by postId 
-                // without a proper index or running a query without orderBy. We will simulate a count 
-                // by fetching documents where the ID starts with `postId_` but Firestore queries 
-                // won't handle that efficiently without indexes.
-                
-                // For demonstration, we simulate the simplest query. This will require an index 
-                // if run on a real large database, but for a simple TMA, this is often tolerated 
-                // by the simulator/rules if no complex ordering/filtering is involved.
-                const snapshot = await getDocs(query(likesCollectionRef, where('postId', '==', postId)));
-                return snapshot.size;
-
-            } catch (error) {
-                console.warn("Could not retrieve exact like count (potential index issue):", error);
-                return 0; // Fallback to 0 if query fails (e.g., missing index)
-            }
-        }
-
-        async function createPostElement(post, userId) { 
-            const postId = post.id;
-            const postElement = document.createElement('div');
-            postElement.className = 'post-card';
-            postElement.setAttribute('data-post-id', postId);
-            
-            let isLiked = false;
-            if (db) {
-                const likeDocRef = doc(db, LIKES_COLLECTION_PATH, `${postId}_${userId.toString()}`);
-                const likeDoc = await getDoc(likeDocRef);
-                isLiked = likeDoc.exists();
-            }
-
-            // Note: Displaying the likes count here is difficult without a complex aggregated field 
-            // in the post document or a costly query. We default to 0 and rely on the UI update 
-            // after a manual like/unlike action.
-            const displayLikesCount = post.likeCount || 0; 
-            const isAdmin = isAdminUser(userId);
-            const deleteButton = isAdmin 
-                ? `<button class="delete-btn" data-post-id="${postId}"><i class="fas fa-trash"></i> Delete</button>` 
-                : '';
-            const adminBadge = post.isAdmin ? '<span class="admin-badge">Admin</span>' : '';
-
-            postElement.innerHTML = `
-                ${adminBadge}
-                <p class="post-content">${post.content}</p>
-                <div class="post-actions">
-                    <button class="like-btn ${isLiked ? 'liked' : ''}" data-post-id="${postId}" aria-label="${isLiked ? 'Unlike' : 'Like'} Post">
-                        <i class="fas fa-heart"></i> 
-                        ${displayLikesCount}
-                    </button>
-                    ${deleteButton} 
-                </div>
-            `;
-            return postElement;
-        } 
-
-        function performDeletePost(postId, userId) { 
-            if (!isAdminUser(userId) || !db) {
-                showToast("Only Admins can delete posts or database not ready.");
-                return;
-            }
-            // Use Telegram's confirm modal
-            if (tg && tg.showConfirm) {
-                tg.showConfirm('Are you sure you want to delete this post?', (ok) => {
-                    if (ok) {
-                         const postRef = doc(db, POSTS_COLLECTION_PATH, postId);
-                         deleteDoc(postRef).then(() => {
-                            showToast("Post deleted successfully!");
-                         }).catch(error => {
-                            console.error("Error removing document: ", error);
-                            showToast("Deletion failed on server. Check Security Rules.");
-                         });
-                    }
-                });
-            } else {
-                showToast("Deletion failed: Mini App confirmation API not available.");
-            }
-        }
-
-        function addPostEventListeners(userId) { 
-            document.querySelectorAll('.like-btn').forEach(button => {
-                button.onclick = (e) => toggleLike(e, userId); 
-            });
-            document.querySelectorAll('.delete-btn').forEach(button => {
-                button.onclick = (e) => {
-                    const postId = e.currentTarget.getAttribute('data-post-id');
-                    performDeletePost(postId, userId); 
-                };
-            });
-        }
-
-        function setupPostFilters() { 
-            const tabs = document.querySelectorAll('.filter-tab');
-            tabs.forEach(tab => {
-                tab.addEventListener('click', () => {
-                    const filter = tab.getAttribute('data-filter');
-                    tabs.forEach(t => {
-                        t.classList.remove('active');
-                        t.setAttribute('aria-selected', 'false');
-                    });
-                    tab.classList.add('active');
-                    tab.setAttribute('aria-selected', 'true');
-                    
-                    if (currentPostFilter !== filter) {
-                        currentPostFilter = filter;
-                        const contentArea = document.querySelector('.content');
-                        if (contentArea) contentArea.scrollTop = 0; 
-                        loadPostsRealtime(currentUserId); 
-                    }
-                });
-            });
-        }
-
-        // ===========================================
-        //          ADMIN POST LOGIC (FIXED)
-        // ===========================================
-
-        function setupAdminPostLogic(isAdmin) { 
-            const postAddButton = document.getElementById('post-add-button');
-            const submitPostBtn = document.getElementById('submit-post-btn');
-            const cancelPostBtn = document.getElementById('cancel-post-btn');
-            const postInput = document.getElementById('post-input');
-
-            if (isAdmin) {
-                if (postAddButton) postAddButton.style.display = 'flex';
-                if (postAddButton) postAddButton.onclick = () => openModal('post-modal');
-                
-                if (cancelPostBtn) { 
-                    cancelPostBtn.onclick = () => {
-                        postInput.value = ''; 
-                        closeModal('post-modal');
-                    };
-                }
-
-                if (submitPostBtn && postInput) {
-                    submitPostBtn.onclick = async () => { // Use async
-                        if (!db) {
-                            showToast("Error: Database not initialized.");
-                            closeModal('post-modal');
-                            return;
-                        }
-                        if (!isAdminUser(currentUserId)) {
-                             showToast("Error: Authorization failed. You are not recognized as Admin.");
-                             closeModal('post-modal');
-                             return;
-                        }
-                        
-                        const content = postInput.value.trim();
-                        
-                        if (content.length < 5 || content.length > 500) {
-                            showToast("Post must be between 5 and 500 characters.");
-                            return;
-                        }
-                        
-                        submitPostBtn.disabled = true;
-                        submitPostBtn.textContent = 'Posting...';
-
-                        const newPost = {
-                            authorId: currentUserId.toString(), // ID ကို String အနေနဲ့ သိမ်းပါ
-                            authorName: currentUserName || 'Admin', 
-                            isAdmin: true,
-                            content: content,
-                            timestamp: serverTimestamp(), // Use modular serverTimestamp
-                            likeCount: 0 // Initialize count field for potential future use
-                        };
-                        
-                        try {
-                            const collectionRef = collection(db, POSTS_COLLECTION_PATH);
-                            await addDoc(collectionRef, newPost); // Use modular addDoc
-                            
-                            postInput.value = ''; 
-                            const newPostsTab = document.getElementById('new-posts-tab');
-                            if (newPostsTab) newPostsTab.click(); 
-                            
-                            closeModal('post-modal'); 
-                            showToast("Announcement posted successfully!");
-                        } catch(error) {
-                            console.error("Error writing document (Check Security Rules): ", error);
-                            // CRITICAL WARNING: If this error shows, tell the user the security rules are the likely cause.
-                            showToast(`Posting Failed! Check Console & **Firestore Rules**: ${error.message}`);
-                        } finally {
-                            submitPostBtn.disabled = false;
-                            submitPostBtn.textContent = 'Post Now';
-                        }
-                    };
-                }
-            } else {
-                if (postAddButton) postAddButton.style.display = 'none';
-                if (postAddButton) postAddButton.onclick = null;
-            }
-        }
-
-
-        // ===========================================
-        //          MODAL & MUSIC LOGIC
-        // ===========================================
-
-        function openModal(modalId) { 
-            const modal = document.getElementById(modalId);
-            if (!modal) return;
-            document.body.style.overflow = 'hidden'; 
-            modal.classList.add('active');
-
-            const fab = document.getElementById('post-add-button');
-            if (fab) fab.style.display = 'none'; 
-            
-            modal.onclick = (e) => {
-                if (e.target === modal) { 
-                    closeModal(modalId);
-                }
-            };
-        }
-
-        function closeModal(modalId) { 
-            const modal = document.getElementById(modalId);
-            if (!modal) return;
-            modal.classList.remove('active');
-            modal.onclick = null; 
-
-            setTimeout(() => {
-                if (!document.querySelector('.modal-overlay.active')) {
-                     document.body.style.overflow = '';
-                }
-               
-                const homeScreen = document.getElementById('home-screen');
-                if (homeScreen && homeScreen.classList.contains('active') && is_admin) {
-                    const fab = document.getElementById('post-add-button');
-                    if (fab) fab.style.display = 'flex'; 
-                }
-            }, 300);
-        }
-
-        function updateMusicStatus(isPlaying) { 
-            if (!musicStatusSpan || !volumeToggleIcon) return;
-            let statusText = isPlaying 
-                ? `🎶 Music Playing ${isMusicMuted ? '(Muted)' : ''} 🎶` 
-                : 'Music Paused (Tap Icon to Play)';
-            musicStatusSpan.textContent = statusText;
-            
-            if (isPlaying) {
-                volumeToggleIcon.className = `fas ${isMusicMuted ? 'fa-volume-off' : 'fa-volume-up'}`;
-                volumeToggleIcon.title = isMusicMuted ? "Unmute Music" : "Mute Music";
-            } else {
-                volumeToggleIcon.className = 'fas fa-volume-off';
-                volumeToggleIcon.title = "Start Playing Music";
-            }
-        }
-
-        function toggleVolume() { 
-            if (!audioPlayer) return;
-
-            if (audioPlayer.paused) {
-                audioPlayer.volume = isMusicMuted ? 0 : 1;
-                
-                const playPromise = audioPlayer.play();
-                
-                if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        showToast(isMusicMuted ? "Music started (Muted)." : "Music started playing.");
-                    }).catch(e => {
-                        console.error("Failed to play audio on click:", e);
-                        showToast('Playback Failed. Please tap the volume icon again to allow play.');
-                        updateMusicStatus(false);
-                    });
-                }
-            } else {
-                isMusicMuted = !isMusicMuted;
-                audioPlayer.volume = isMusicMuted ? 0 : 1;
-                showToast(isMusicMuted ? "Music muted." : "Music unmuted.");
-                updateMusicStatus(true);
-            }
-        }
-
-        function setupMusicPlayer() { 
-            audioPlayer = document.getElementById('audio-player');
-            musicStatusSpan = document.getElementById('current-music-status');
-            volumeToggleIcon = document.getElementById('volume-toggle');
-            
-            if (!audioPlayer) return;
-            let initialUrl = localStorage.getItem(TEMP_MUSIC_KEY) || INITIAL_DEFAULT_URL;
-            audioPlayer.src = initialUrl;
-            audioPlayer.loop = true;
-            audioPlayer.volume = isMusicMuted ? 0 : 1;
-            
-            if(volumeToggleIcon) volumeToggleIcon.onclick = toggleVolume;
-            
-            audioPlayer.onplay = () => updateMusicStatus(true);
-            audioPlayer.onpause = () => updateMusicStatus(false);
-            
-            audioPlayer.onerror = (e) => { 
-                console.error("Audio error details:", e);
-                audioPlayer.pause();
-                updateMusicStatus(false);
-                showToast("Music Load Error. Playing stopped. Check URL or file."); 
-            };
-            
-            updateMusicStatus(false); 
-        }
-
-        function setMusicUrl(url, sourceName) { 
-            if (!url || !audioPlayer) return;
-            
-            if (!url.match(/^https?:\/\/.+\..+$/) && url !== INITIAL_DEFAULT_URL && !url.startsWith('blob:')) {
-                showToast("Invalid URL format. http/https required.");
-                return;
-            }
-            
-            localStorage.setItem(TEMP_MUSIC_KEY, url);
-            audioPlayer.src = url;
-            audioPlayer.load();
-            audioPlayer.pause(); 
-            
-            closeModal('music-modal');
-            closeModal('url-input-modal');
-            showToast(`${sourceName} set. Tap the Volume Icon to play.`);
-        }
-
-        function addMusicEventListeners() { 
-            document.getElementById('music-button').onclick = () => openModal('music-modal');
-            document.getElementById('cancel-music-modal-btn').onclick = () => closeModal('music-modal');
-            
-            document.querySelectorAll('.music-option-list .music-option').forEach(option => {
-                option.onclick = (e) => {
-                    const type = e.currentTarget.getAttribute('data-music-type');
-                    if (type === 'default') {
-                        setMusicUrl(INITIAL_DEFAULT_URL, "Default Track"); 
-                    } else if (type === 'url') {
-                        closeModal('music-modal'); 
-                        openModal('url-input-modal'); 
-                        const urlInput = document.getElementById('music-url-input');
-                        const savedUrl = localStorage.getItem(TEMP_MUSIC_KEY);
-                        if (urlInput) urlInput.value = (savedUrl && savedUrl !== INITIAL_DEFAULT_URL) ? savedUrl : ''; 
-                    }
-                };
-            });
-
-            document.getElementById('close-url-modal-btn').onclick = () => {
-                closeModal('url-input-modal');
-                openModal('music-modal'); 
-            };
-            
-            document.getElementById('play-url-btn').onclick = () => {
-                const url = document.getElementById('music-url-input').value.trim();
-                if (url) {
-                    setMusicUrl(url, "Custom URL"); 
-                } else {
-                    showToast("Please enter a valid Music URL.");
-                }
-            };
-            
-            const fileInput = document.getElementById('music-upload-input');
-            fileInput.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file && file.type.startsWith('audio/')) {
-                    const url = URL.createObjectURL(file); 
-                    setMusicUrl(url, file.name); 
-                } else {
-                     showToast("Please select a valid audio file.");
-                }
-                e.target.value = null; 
-            };
-        }
-
-
-        // ===========================================
-        //          MAIN ENTRY
-        // ===========================================
-
-        function updateProfileDisplay(userId, fullName, username, is_admin) { 
-            const displayUsername = username ? `@${username}` : 'Username N/A';
-            document.getElementById('profile-display-name').textContent = fullName || 'User';
-            document.getElementById('profile-display-username').textContent = displayUsername;
-            document.getElementById('telegram-chat-id').textContent = userId.toString();
-            const adminStatusEl = document.getElementById('admin-status');
-            adminStatusEl.textContent = is_admin ? 'Administrator' : 'Regular User';
-            adminStatusEl.style.backgroundColor = is_admin ? 'var(--tg-theme-link-color)' : 'var(--tg-theme-hint-color)';
-            
-            const tgUser = tg ? tg.initDataUnsafe.user : null;
-            const tgPhotoUrl = tgUser ? tgUser.photo_url : null;
-            const profileAvatarPlaceholder = document.getElementById('profile-avatar-placeholder');
-
-            if (profileAvatarPlaceholder) {
-                if (tgPhotoUrl) {
-                    profileAvatarPlaceholder.innerHTML = `<img src="${tgPhotoUrl}" alt="${fullName || 'Profile Photo'}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-                    profileAvatarPlaceholder.style.backgroundColor = 'transparent';
-                    profileAvatarPlaceholder.textContent = '';
-                } else {
-                    const userColor = stringToColor(userId.toString());
-                    const initial = (fullName.charAt(0) || 'U').toUpperCase();
-                    profileAvatarPlaceholder.innerHTML = ''; 
-                    profileAvatarPlaceholder.style.backgroundColor = userColor;
-                    profileAvatarPlaceholder.textContent = initial;
-                    profileAvatarPlaceholder.style.fontSize = '1.5rem';
-                }
-            }
-        }
-
-        function setupProfileListeners() { 
-            const copyBtn = document.getElementById('chat-id-copy-btn');
-            if (copyBtn) copyBtn.onclick = () => copyToClipboard(currentUserId.toString(), 'User ID copied.');
-            const closeBtn = document.getElementById('tma-close-btn');
-            if (closeBtn) closeBtn.onclick = () => tg && tg.close ? tg.close() : showToast("Mini App Close API Not Available."); 
-        }
-
-        function switchScreen(targetScreenId) { 
-            document.querySelectorAll('.content .screen').forEach(screen => screen.classList.remove('active'));
-            const targetScreen = document.getElementById(targetScreenId);
-            if (targetScreen) targetScreen.classList.add('active');
-            document.querySelectorAll('.bottom-nav .nav-item').forEach(item => {
-                item.classList.toggle('active', item.getAttribute('data-screen') === targetScreenId);
-            });
-            
-            const fixedHeaderArea = document.querySelector('.fixed-header-area');
-            const fab = document.getElementById('post-add-button');
-            const contentArea = document.querySelector('.content');
-            
-            if (targetScreenId === 'profile-screen') {
-                if (fixedHeaderArea) fixedHeaderArea.style.display = 'none';
-                if (contentArea) contentArea.style.paddingTop = '20px'; 
-                if (fab) fab.style.display = 'none';
-            } else { // home-screen
-                if (fixedHeaderArea) fixedHeaderArea.style.display = 'block';
-                // Recalculate padding based on potentially shown header
-                const headerHeight = fixedHeaderArea ? fixedHeaderArea.offsetHeight : 0;
-                if (contentArea) contentArea.style.paddingTop = `${headerHeight + 20}px`; 
-                if (fab && is_admin) fab.style.display = 'flex'; 
-            }
-            if (contentArea) contentArea.scrollTop = 0;
-        }
-
-        function addNavigationListeners() { 
-            document.querySelectorAll('.bottom-nav .nav-item').forEach(item => {
-                item.addEventListener('click', (e) => switchScreen(e.currentTarget.getAttribute('data-screen')));
-            });
-        }
-        
-        // This function runs AFTER Firebase Auth is confirmed
-        function startApp(userId) {
-            currentUserId = userId;
-            document.getElementById('auth-status').textContent = `Auth Status: Success (UID: ${userId.substring(0, 8)}...)`;
-
-            const user = tg.initDataUnsafe.user;
-            if (user && user.id) {
-                // For Telegram Mini App environment, we should prioritize the Telegram user ID for Admin check
-                const tgUserId = parseInt(user.id);
-                const nameParts = [user.first_name, user.last_name].filter(Boolean);
-                currentUserName = nameParts.length > 0 ? nameParts.join(' ') : 'Anonymous User';
-                currentUserUsername = user.username || null;
-                is_admin = isAdminUser(tgUserId); // Check admin status using Telegram ID
-            }
-            
-            addNavigationListeners();
-            setupPostFilters();
-            setupMusicPlayer();
-            addMusicEventListeners();
-            setupProfileListeners();
-            setupAdminPostLogic(is_admin);
-            
-            updateProfileDisplay(currentUserId, currentUserName, currentUserUsername, is_admin);
-            
-            // Start listening to the posts only after authentication is ready
-            loadPostsRealtime(currentUserId);
-            
-            switchScreen('home-screen');
-            if (tg.MainButton) tg.MainButton.hide();
-            tg.ready(); 
-        }
-
-        async function setupTMA() { 
-            if (window.Telegram && window.Telegram.WebApp) {
-                tg = window.Telegram.WebApp;
-                tg.expand();
-                const themeParams = tg.themeParams;
-                
-                // Apply Telegram Theme Colors
-                if (themeParams) {
-                    const root = document.documentElement;
-                    const themeMap = {
-                        '--tg-theme-bg-color': themeParams.bg_color || '#0d1117',
-                        '--tg-theme-secondary-bg-color': themeParams.secondary_bg_color || '#1a202c',
-                        '--tg-theme-text-color': themeParams.text_color || '#ffffff',
-                        '--tg-theme-link-color': themeParams.link_color || '#20b2aa', // Use Link Color for accents
-                        '--tg-theme-button-color': themeParams.button_color || '#4caf50', 
-                        '--tg-theme-button-text-color': themeParams.button_text_color || '#ffffff',
-                        '--tg-theme-destructive-text-color': themeParams.destructive_text_color || '#ff9800', 
-                        '--tg-theme-hint-color': themeParams.hint_color || '#bdbdbd'
-                    };
-                    
-                    for (const [prop, value] of Object.entries(themeMap)) {
-                        root.style.setProperty(prop, value);
-                    }
-                    document.body.style.backgroundColor = themeMap['--tg-theme-bg-color'];
-                }
-                
-                // CRITICAL: Initialize Auth and wait for UID before proceeding
-                let authReadyPromise = new Promise(async (resolve) => {
-                    if (initialAuthToken) {
-                        try {
-                            await signInWithCustomToken(auth, initialAuthToken);
-                            resolve(auth.currentUser.uid);
-                            return;
-                        } catch (error) {
-                            console.error("Custom token sign-in failed. Falling back to anonymous:", error);
-                        }
-                    }
-                    
-                    try {
-                        const anonUser = await signInAnonymously(auth);
-                        resolve(anonUser.user.uid);
-                    } catch (error) {
-                        console.error("Anonymous sign-in failed:", error);
-                        showToast("Authentication Failed! Data may not load.");
-                        resolve('unauthenticated-user-error');
-                    }
-                });
-
-                const userId = await authReadyPromise;
-                startApp(userId);
-
-            } else {
-                // Fallback for local testing
-                console.warn("Telegram WebApp SDK not found. Running in fallback mode (Local Testing).");
-                
-                const mockAdminId = ADMIN_CHAT_IDS.length > 0 ? ADMIN_CHAT_IDS[0] : 123456789; 
-                tg = {
-                    initDataUnsafe: { user: { id: mockAdminId, first_name: "Local", last_name: "Tester", username: "local_tester", photo_url: null } },
-                    themeParams: {},
-                    ready: () => console.log('TMA Mock Ready'),
-                    close: () => console.log('TMA Mock Close'),
-                    showConfirm: (msg, callback) => callback(window.confirm(msg)), // Mocked window.confirm for local dev
-                    HapticFeedback: { impactOccurred: () => console.log('Haptic: Light') },
-                    MainButton: { hide: () => console.log('MainButton: Hide') },
-                    expand: () => console.log('TMA Mock Expanded')
-                };
-
-                const root = document.documentElement;
-                root.style.setProperty('--tg-theme-bg-color', '#0d1117');
-                root.style.setProperty('--tg-theme-text-color', '#ffffff');
-                root.style.setProperty('--tg-theme-secondary-bg-color', '#1a202c');
-                root.style.setProperty('--tg-theme-link-color', '#20b2aa');
-                root.style.setProperty('--tg-theme-button-color', '#4caf50');
-                root.style.setProperty('--tg-theme-destructive-text-color', '#ff9800');
-                root.style.setProperty('--tg-theme-hint-color', '#bdbdbd');
-                document.body.style.backgroundColor = 'var(--tg-theme-bg-color)';
-
-                startApp(mockAdminId.toString());
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', setupTMA);
-    </script>
 </body>
 </html>
 

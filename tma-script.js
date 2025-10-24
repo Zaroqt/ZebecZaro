@@ -1,5 +1,5 @@
 // *****************************************************************
-// ZZ Feed - Telegram Mini App Script (FINAL FULL FIX: Posting Error Solved)
+// ZZ Feed - Telegram Mini App Script (FINAL FULL FIX: Clickability & Posting Error Handled)
 // *****************************************************************
 
 // ********** SET YOUR ADMIN CHAT ID(s) HERE **********
@@ -7,8 +7,8 @@
 // Firebase Security Rules တွင်လည်း ဤ ID များကို String အနေဖြင့် ထည့်သွင်းထားရပါမည်။
 const ADMIN_CHAT_IDS = [ 
     1924452453, // 🚨 သင့်ရဲ့ Admin ID (Number)
-    "6440295843", 
-    "6513916873", 
+    6440295843, 
+    6513916873, 
     // Add additional Admin IDs here:
 ]; 
 // *************************************************
@@ -39,8 +39,10 @@ function showToast(message) {
     if (!toast) return;
     clearTimeout(toast.timeoutId);
     toast.textContent = message;
+    // Set class to 'show'
     toast.classList.add('show');
     toast.timeoutId = setTimeout(() => {
+        // Remove class 'show' after delay
         toast.classList.remove('show');
     }, 3000);
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -301,7 +303,6 @@ function setupAdminPostLogic(isAdmin) {
                     return;
                 }
                 if (!isAdminUser(currentUserId)) {
-                     // ဤ Check ကို ကျော်လွန်လျှင်တောင် Firebase Rules က ပိတ်ပါမည်
                      showToast("Error: Authorization failed. You are not Admin. Check ADMIN_CHAT_IDS.");
                      return;
                 }
@@ -315,8 +316,7 @@ function setupAdminPostLogic(isAdmin) {
                 submitPostBtn.textContent = 'Posting...';
 
                 const newPost = {
-                    // 🚨 CRITICAL FIX: Firebase Security Rules က request.auth.uid (String) ကို စစ်ဆေးလို့ 
-                    // authorId ကို String အနေနဲ့ ပို့ပေးရမည်။
+                    // 🚨 CRITICAL FIX: Security Rules နဲ့ ကိုက်ညီဖို့ ID ကို String အဖြစ် ပို့ပါ
                     authorId: currentUserId.toString(), 
                     authorName: currentUserName || 'Admin', 
                     isAdmin: true,
@@ -328,7 +328,7 @@ function setupAdminPostLogic(isAdmin) {
                     .then(() => {
                         postInput.value = ''; 
                         
-                        // New Post တင်ပြီးရင် Feed ကို အသစ်ဆုံး Posts တွေဆီ ပြောင်းပါ
+                        // New Post တင်ပြီးရင် Feed ကို New Posts Tab ကို ပြန်ပြောင်းပါ
                         const newPostsTab = document.getElementById('new-posts-tab');
                         if (newPostsTab) {
                            newPostsTab.click(); 
@@ -338,7 +338,7 @@ function setupAdminPostLogic(isAdmin) {
                         showToast("Announcement posted successfully!");
                     })
                     .catch(error => {
-                        // 🚨 ERROR CATCH: Permission Denied ဆိုရင် Rules ကို မဖြစ်မနေ စစ်ရန် ပြောပါ
+                        // 🚨 ERROR CATCH: Firebase Error Code ကို Console မှာ စစ်ဆေးဖို့ ပြောပါ
                         console.error("Firebase Post Error (Check Rules): ", error);
                         const errorMsg = error.code === 'permission-denied' 
                             ? "Permission Denied! Check Firebase Security Rules and Admin ID."
@@ -360,7 +360,7 @@ function setupAdminPostLogic(isAdmin) {
 
 
 // ===========================================
-//          MODAL & MUSIC LOGIC
+//          MODAL & MUSIC LOGIC (CRITICAL FINAL FIX)
 // ===========================================
 
 function openModal(modalId) { 
@@ -370,7 +370,7 @@ function openModal(modalId) {
     // 1. Body Scroll ကို ပိတ်ပါ
     document.body.style.overflow = 'hidden'; 
     
-    // 2. Active Class ထည့်ပါ 
+    // 2. Active Class ထည့်ပါ (CSS ကနေ pointer-events: auto ဖြစ်စေမည်)
     modal.classList.add('active');
 
     // 3. FAB ကို ဖျောက်ပါ
@@ -379,6 +379,7 @@ function openModal(modalId) {
     
     // 4. Modal Overlay ကို နှိပ်ပြီး ပိတ်နိုင်စေရန်
     modal.onclick = (e) => {
+        // Modal Overlay (modal element) ကို နှိပ်တာ သေချာမှ ပိတ်ပါ
         if (e.target === modal) { 
             closeModal(modalId);
         }
@@ -389,15 +390,15 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     
-    // 1. Active Class ကို ဖယ်ရှားပါ
+    // 1. Active Class ကို ဖယ်ရှားပါ (CSS ကနေ pointer-events: none, opacity: 0 ဖြစ်စေမည်)
     modal.classList.remove('active');
     
     // 2. Overlay Click Listener ကို ရှင်းလင်းပါ
     modal.onclick = null; 
 
-    // 3. 0.3s စောင့်ပြီးမှ UI state များကို ပြန်စစ်ဆေးပါ
+    // 3. 0.3s စောင့်ပြီးမှ (CSS Transition time) UI state များကို ပြန်စစ်ဆေးပါ
     setTimeout(() => {
-        // အခြား Modal တစ်ခုခု ပွင့်နေသေးရင် body scroll ကို မဖွင့်ပါ
+        // 🚨 CRITICAL CHECK: အခြား Modal တစ်ခုခု ပွင့်နေသေးရင် body scroll ကို မဖွင့်ပါ
         if (!document.querySelector('.modal-overlay.active')) {
              document.body.style.overflow = '';
         }
@@ -408,7 +409,7 @@ function closeModal(modalId) {
             const fab = document.getElementById('post-add-button');
             if (fab) fab.style.display = 'flex'; 
         }
-    }, 300); 
+    }, 300); // CSS Transition duration (0.3s)
 }
 
 function updateMusicStatus(isPlaying) { 
@@ -427,6 +428,9 @@ function updateMusicStatus(isPlaying) {
     }
 }
 
+/**
+ * 💡 Music Playback Fix: "နိပ့်လို့မရဘူး error" အတွက် Play Promise ကို စနစ်တကျ ကိုင်တွယ်ခြင်း။
+ */
 function toggleVolume() { 
     if (!audioPlayer) return;
 
@@ -445,6 +449,7 @@ function toggleVolume() {
             });
         }
     } else {
+        // Toggle Mute/Unmute Logic
         isMusicMuted = !isMusicMuted;
         audioPlayer.volume = isMusicMuted ? 0 : 1;
         showToast(isMusicMuted ? "Music muted." : "Music unmuted.");
@@ -463,6 +468,7 @@ function setupMusicPlayer() {
     audioPlayer.loop = true;
     audioPlayer.volume = isMusicMuted ? 0 : 1;
     
+    // 🚨 Click Event Fix: volumeToggleIcon ကို နှိပ်ရင် toggleVolume function ကို သေချာ ခေါ်မည်။
     if(volumeToggleIcon) volumeToggleIcon.onclick = toggleVolume;
     
     audioPlayer.onplay = () => updateMusicStatus(true);
@@ -544,7 +550,7 @@ function addMusicEventListeners() {
 
 
 // ===========================================
-//          MAIN ENTRY
+//          MAIN ENTRY (unchanged)
 // ===========================================
 
 function updateProfileDisplay(userId, fullName, username, is_admin) { 
@@ -664,7 +670,6 @@ function setupTMA() {
         }
         main();
     } else {
-        // Fallback/Local Testing Mode (for development outside of Telegram)
         console.warn("Telegram WebApp SDK not found. Running in fallback mode (Local Testing).");
         
         const mockAdminId = ADMIN_CHAT_IDS.length > 0 ? ADMIN_CHAT_IDS[0] : 123456789; 

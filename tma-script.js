@@ -1,12 +1,12 @@
 // *****************************************************************
-// ZZ Feed - Telegram Mini App Script (FINAL FULL FIX: Clickability & Posting Error Handled)
+// ZZ Feed - Telegram Mini App Script (FINAL FULL FIX: Debug Logging Added)
 // *****************************************************************
 
 // ********** SET YOUR ADMIN CHAT ID(s) HERE **********
-// 🚨 NOTE: These are NUMBERS (for JS logic to check isAdminUser)
-// Firebase Security Rules တွင်လည်း ဤ ID များကို String အနေဖြင့် ထည့်သွင်းထားရပါမည်။
+// 🚨 NOTE: These are NUMBERS (JS မှ စစ်ဆေးရန်အတွက်)
+// ဤနေရာတွင် သင့်ရဲ့ Admin ID (Number) ကို ထည့်သွင်းပါ
 const ADMIN_CHAT_IDS = [ 
-    1924452453, // 🚨 သင့်ရဲ့ Admin ID (Number) ကို ဤနေရာတွင် ထည့်ပါ
+    1924452453, 
     6440295843, 
     6513916873, 
     // Add additional Admin IDs here:
@@ -39,10 +39,8 @@ function showToast(message) {
     if (!toast) return;
     clearTimeout(toast.timeoutId);
     toast.textContent = message;
-    // Set class to 'show'
     toast.classList.add('show');
     toast.timeoutId = setTimeout(() => {
-        // Remove class 'show' after delay
         toast.classList.remove('show');
     }, 3000);
     if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -123,6 +121,7 @@ function loadPostsRealtime(userId) {
         addPostEventListeners(userId); 
     }, error => {
         console.error("Error listening to posts:", error);
+        // 🚨 ယခင်က Error Message ကို ပြန်ပြောင်းထားသည်
         container.innerHTML = '<p class="initial-loading-text" style="color:var(--tg-theme-destructive-text-color);">❌ Failed to load posts from server. Check firewall/rules.</p>';
         showToast("Error connecting to database.");
     });
@@ -147,8 +146,6 @@ async function toggleLike(e, userId) {
             showToast("Unliked.");
         } else {
             // userId is stored as a String in the like document (for consistency with post authorId)
-            // 🚨 Note: Like လုပ်ရာတွင် Firebase Rules မှ 'request.auth.uid' ကို စစ်ဆေးသောကြောင့်
-            // Admin ID မဟုတ်သူများပါ Like လုပ်နိုင်ပါသည်။
             await likeDocRef.set({ postId: postId, userId: userId.toString(), timestamp: firebase.firestore.FieldValue.serverTimestamp() });
             change = 1;
             isLikedNow = true;
@@ -157,7 +154,6 @@ async function toggleLike(e, userId) {
         updateLikeCountDisplay(likeButton, change, isLikedNow);
     } catch (error) {
         console.error("Error toggling like:", error);
-        // Show detailed error to help user check rules
         showToast(`Like Failed! Check Security Rules. Error: ${error.code || 'Unknown'}`);
     }
 }
@@ -189,7 +185,6 @@ async function createPostElement(post, userId) {
     postElement.setAttribute('data-post-id', postId);
     
     let isLiked = false;
-    // 🚨 currentUserId ကို String အနေနဲ့ ပို့စစ်ရပါမည်
     if (window.db && userId) { 
         const likeDoc = await window.db.collection(LIKES_COLLECTION).doc(`${postId}_${userId.toString()}`).get();
         isLiked = likeDoc.exists;
@@ -274,7 +269,7 @@ function setupPostFilters() {
 
 
 // ===========================================
-//          ADMIN POST LOGIC (Posting Final Fix)
+//          ADMIN POST LOGIC 
 // ===========================================
 
 function setupAdminPostLogic(isAdmin) { 
@@ -297,14 +292,19 @@ function setupAdminPostLogic(isAdmin) {
             submitPostBtn.onclick = () => {
                 const content = postInput.value.trim();
                 
+                // 🚨 CRITICAL DEBUGGING: Console မှာ Admin ID ကို ပြန်စစ်ဆေးခြင်း
+                console.log(`[DEBUG] Attempting Post: User ID is ${currentUserId} (Type: ${typeof currentUserId})`);
+                console.log(`[DEBUG] Is Admin Check Result (Client-side): ${isAdminUser(currentUserId)}`);
+                
                 // Pre-flight checks
                 if (!window.db) {
                     showToast("Error: Database not initialized. Check Firebase config.");
                     return;
                 }
-                // 🚨 Client-side check (Admin Number)
+                
                 if (!isAdminUser(currentUserId)) {
-                     showToast("Error: Authorization failed. You are not Admin. Check ADMIN_CHAT_IDS.");
+                     // 🚨 ပိုမိုရှင်းလင်းသော Error Message 
+                     showToast("❌ Client Check Failed: You are not recognized as Admin. Check ADMIN_CHAT_IDS in code.");
                      return;
                 }
                 if (content.length < 5 || content.length > 500) {
@@ -317,7 +317,7 @@ function setupAdminPostLogic(isAdmin) {
                 submitPostBtn.textContent = 'Posting...';
 
                 const newPost = {
-                    // 🚨 CRITICAL FIX: Security Rules နဲ့ ကိုက်ညီဖို့ ID ကို String အဖြစ် ပို့ပါ
+                    // 🚨 CRITICAL: Firestore Rules မှ စစ်ဆေးနိုင်ရန် ID ကို String အဖြစ် ပို့ပါ
                     authorId: currentUserId.toString(), 
                     authorName: currentUserName || 'Admin', 
                     isAdmin: true,
@@ -329,7 +329,6 @@ function setupAdminPostLogic(isAdmin) {
                     .then(() => {
                         postInput.value = ''; 
                         
-                        // New Post တင်ပြီးရင် Feed ကို New Posts Tab ကို ပြန်ပြောင်းပါ
                         const newPostsTab = document.getElementById('new-posts-tab');
                         if (newPostsTab) {
                            newPostsTab.click(); 
@@ -339,15 +338,14 @@ function setupAdminPostLogic(isAdmin) {
                         showToast("Announcement posted successfully!");
                     })
                     .catch(error => {
-                        // 🚨 ERROR CATCH: Firebase Error Code ကို Console မှာ စစ်ဆေးဖို့ ပြောပါ
                         console.error("Firebase Post Error (Check Rules): ", error);
                         const errorMsg = error.code === 'permission-denied' 
-                            ? "Permission Denied! Check Firebase Security Rules and Admin ID."
+                            // 🚨 Permission Denied ဆိုရင် Rules ကို ပြန်စစ်ခိုင်းပါ
+                            ? "Permission Denied! Check Firebase Security Rules (String ID) and Admin ID."
                             : `Posting FAILED! Error: ${error.code || 'Unknown'}`;
                         showToast(errorMsg);
                     })
                     .finally(() => {
-                        // 🚨 CRITICAL FIX: Error ဖြစ်ဖြစ်၊ မဖြစ်ဖြစ် Button ကို ပြန်ဖွင့်ပါ
                         submitPostBtn.disabled = false;
                         submitPostBtn.textContent = 'Post Now';
                     });
@@ -361,26 +359,20 @@ function setupAdminPostLogic(isAdmin) {
 
 
 // ===========================================
-//          MODAL & MUSIC LOGIC (CRITICAL FINAL FIX)
+//          MODAL & MUSIC LOGIC 
 // ===========================================
 
 function openModal(modalId) { 
     const modal = document.getElementById(modalId);
     if (!modal) return;
     
-    // 1. Body Scroll ကို ပိတ်ပါ
     document.body.style.overflow = 'hidden'; 
-    
-    // 2. Active Class ထည့်ပါ (CSS ကနေ pointer-events: auto ဖြစ်စေမည်)
     modal.classList.add('active');
 
-    // 3. FAB ကို ဖျောက်ပါ
     const fab = document.getElementById('post-add-button');
     if (fab) fab.style.display = 'none'; 
     
-    // 4. Modal Overlay ကို နှိပ်ပြီး ပိတ်နိုင်စေရန်
     modal.onclick = (e) => {
-        // Modal Overlay (modal element) ကို နှိပ်တာ သေချာမှ ပိတ်ပါ
         if (e.target === modal) { 
             closeModal(modalId);
         }
@@ -391,26 +383,20 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     
-    // 1. Active Class ကို ဖယ်ရှားပါ (CSS ကနေ pointer-events: none, opacity: 0 ဖြစ်စေမည်)
     modal.classList.remove('active');
-    
-    // 2. Overlay Click Listener ကို ရှင်းလင်းပါ
     modal.onclick = null; 
 
-    // 3. 0.3s စောင့်ပြီးမှ (CSS Transition time) UI state များကို ပြန်စစ်ဆေးပါ
     setTimeout(() => {
-        // 🚨 CRITICAL CHECK: အခြား Modal တစ်ခုခု ပွင့်နေသေးရင် body scroll ကို မဖွင့်ပါ
         if (!document.querySelector('.modal-overlay.active')) {
              document.body.style.overflow = '';
         }
        
-        // Home Screen မှာရှိပြီး Admin ဖြစ်မှ FAB ကို ပြန်ပြပါ
         const homeScreen = document.getElementById('home-screen');
         if (homeScreen && homeScreen.classList.contains('active') && is_admin) {
             const fab = document.getElementById('post-add-button');
             if (fab) fab.style.display = 'flex'; 
         }
-    }, 300); // CSS Transition duration (0.3s)
+    }, 300); 
 }
 
 function updateMusicStatus(isPlaying) { 
@@ -429,9 +415,6 @@ function updateMusicStatus(isPlaying) {
     }
 }
 
-/**
- * 💡 Music Playback Fix: "နိပ့်လို့မရဘူး error" အတွက် Play Promise ကို စနစ်တကျ ကိုင်တွယ်ခြင်း။
- */
 function toggleVolume() { 
     if (!audioPlayer) return;
 
@@ -469,7 +452,6 @@ function setupMusicPlayer() {
     audioPlayer.loop = true;
     audioPlayer.volume = isMusicMuted ? 0 : 1;
     
-    // 🚨 Click Event Fix: volumeToggleIcon ကို နှိပ်ရင် toggleVolume function ကို သေချာ ခေါ်မည်။
     if(volumeToggleIcon) volumeToggleIcon.onclick = toggleVolume;
     
     audioPlayer.onplay = () => updateMusicStatus(true);

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZZ Feed (Community Posts)</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <link rel="stylesheet" href="tma-style.css">
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <script>
+        // *** REPLACE THE CONFIG BELOW WITH YOUR ACTUAL FIREBASE CONFIG ***
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY", 
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID", 
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        if (typeof firebase !== 'undefined') {
+            const firebaseApp = firebase.initializeApp(firebaseConfig);
+            window.db = firebaseApp.firestore();
+            console.log("Firebase and Firestore Initialized.");
+        } else {
+            console.error("Firebase SDK not loaded correctly.");
+        }
+    </script>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <div class="fixed-header-area">
+            <header>
+                <div class="music-info-area">
+                    <span id="current-music-status">Music Paused (Tap Icon to Play)</span>
+                    <i id="volume-toggle" class="fas fa-volume-off" title="Start Playing Music"></i>
+                </div>
+                <button id="music-button" class="icon-btn" aria-label="Music Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </header>
+            
+            <div class="filter-tabs" role="tablist">
+                <button id="new-posts-tab" class="filter-tab active" data-filter="new-posts" role="tab" aria-selected="true">
+                    🔥 New Posts
+                </button>
+                <button class="filter-tab" data-filter="old-posts" role="tab" aria-selected="false">
+                    ⏳ Oldest
+                </button>
+            </div>
+        </div>
+
+        <div class="content">
+            
+            <div id="home-screen" class="screen active">
+                <div id="posts-container" class="posts-list">
+                    <p class="initial-loading-text">Loading posts...</p>
+                </div>
+            </div>
+
+            <div id="profile-screen" class="screen">
+                <div class="profile-card">
+                    <div id="profile-avatar-placeholder" class="avatar-placeholder">U</div>
+                    <h2 id="profile-display-name">Loading...</h2>
+                    <p id="profile-display-username" class="hint-text">Username N/A</p>
+                    <span id="admin-status" class="admin-badge">Regular User</span>
+
+                    <div class="info-row">
+                        <span>Telegram Chat ID:</span>
+                        <div class="copy-area">
+                            <span id="telegram-chat-id">0</span>
+                            <button id="chat-id-copy-btn" class="icon-btn" aria-label="Copy User ID">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button id="tma-close-btn" class="close-app-btn">
+                        <i class="fas fa-times-circle"></i> Close Mini App
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-screen="home-screen" aria-label="Home Feed">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </button>
+            <button class="nav-item" data-screen="profile-screen" aria-label="Profile">
+                <i class="fas fa-user"></i>
+                <span>Profile</span>
+            </button>
+        </nav>
+        
+        <button id="post-add-button" class="fab" aria-label="Add New Post" style="display:none;">
+            <i class="fas fa-plus"></i>
+        </button>
+    </div>
+
+    <div id="post-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Create New Post</h3>
+            <textarea id="post-input" placeholder="Type your announcement (5-500 chars)" maxlength="500"></textarea>
+            <div class="modal-actions">
+                <button id="cancel-post-btn" class="modal-cancel-btn">Cancel</button>
+                <button id="submit-post-btn" class="modal-submit-btn">Post Now</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="music-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Music Settings</h3>
+            <p class="hint-text">Choose your background audio source.</p>
+            <div class="music-option-list">
+                <button class="music-option" data-music-type="default">
+                    <i class="fas fa-headphones"></i> Use Default Lofi
+                </button>
+                <button class="music-option" data-music-type="url">
+                    <i class="fas fa-link"></i> Use Custom URL
+                </button>
+                <label for="music-upload-input" class="music-option">
+                    <i class="fas fa-upload"></i> Upload Local File (.mp3)
+                </label>
+                <input type="file" id="music-upload-input" accept="audio/mp3,audio/*" style="display: none;">
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-music-modal-btn" class="modal-cancel-btn full-width">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="url-input-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Custom Music URL</h3>
+            <input type="url" id="music-url-input" placeholder="Enter HTTP/HTTPS audio link">
+            <div class="modal-actions">
+                <button id="close-url-modal-btn" class="modal-cancel-btn">Back</button>
+                <button id="play-url-btn" class="modal-submit-btn">Set & Play</button>
+            </div>
+        </div>
+    </div>
+
+    <audio id="audio-player" style="display:none;"></audio>
+
+    <div id="custom-toast" class="custom-toast"></div>
+
+    <script src="tma-script.js"></script>
+</body>
+</html>

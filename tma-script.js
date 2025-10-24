@@ -3,9 +3,10 @@
 // *****************************************************************
 
 // ********** SET YOUR ADMIN CHAT ID(s) HERE **********
-// 🚨 NOTE: These are NUMBERS (for JS logic)
+// 🚨 NOTE: These are NUMBERS (for JS logic to check isAdminUser)
+// Firebase Security Rules တွင်လည်း ဤ ID များကို String အနေဖြင့် ထည့်သွင်းထားရပါမည်။
 const ADMIN_CHAT_IDS = [ 
-    1924452453, // Replace with your actual ID
+    1924452453, // 🚨 သင့်ရဲ့ Admin ID (Number)
     6440295843, 
     6513916873, 
     // Add additional Admin IDs here:
@@ -21,7 +22,7 @@ const INITIAL_DEFAULT_URL = 'https://archive.org/download/lofi-chill-1-20/lofi_c
 let audioPlayer;
 let musicStatusSpan;
 let volumeToggleIcon;
-let currentUserId = 0; 
+let currentUserId = 0; // Number (Telegram ID)
 let currentUserName = 'Guest';
 let currentUserUsername = 'anonymous'; 
 let is_admin = false; 
@@ -144,6 +145,8 @@ async function toggleLike(e, userId) {
             showToast("Unliked.");
         } else {
             // userId is stored as a String in the like document (for consistency with post authorId)
+            // 🚨 Note: Like လုပ်ရာတွင် Firebase Rules မှ 'request.auth.uid' ကို စစ်ဆေးသောကြောင့်
+            // Admin ID မဟုတ်သူများပါ Like လုပ်နိုင်ပါသည်။
             await likeDocRef.set({ postId: postId, userId: userId.toString(), timestamp: firebase.firestore.FieldValue.serverTimestamp() });
             change = 1;
             isLikedNow = true;
@@ -184,8 +187,8 @@ async function createPostElement(post, userId) {
     postElement.setAttribute('data-post-id', postId);
     
     let isLiked = false;
-    if (window.db) {
-        // Check if the current user (ID as String) has liked this post
+    // 🚨 currentUserId ကို String အနေနဲ့ ပို့စစ်ရပါမည်
+    if (window.db && userId) { 
         const likeDoc = await window.db.collection(LIKES_COLLECTION).doc(`${postId}_${userId.toString()}`).get();
         isLiked = likeDoc.exists;
     }
@@ -298,6 +301,7 @@ function setupAdminPostLogic(isAdmin) {
                     return;
                 }
                 if (!isAdminUser(currentUserId)) {
+                     // ဤ Check ကို ကျော်လွန်လျှင်တောင် Firebase Rules က ပိတ်ပါမည်
                      showToast("Error: Authorization failed. You are not Admin. Check ADMIN_CHAT_IDS.");
                      return;
                 }
@@ -311,7 +315,8 @@ function setupAdminPostLogic(isAdmin) {
                 submitPostBtn.textContent = 'Posting...';
 
                 const newPost = {
-                    // 🚨 CRITICAL FIX: Security Rules နဲ့ ကိုက်ညီဖို့ ID ကို String အဖြစ် ပို့ပါ
+                    // 🚨 CRITICAL FIX: Firebase Security Rules က request.auth.uid (String) ကို စစ်ဆေးလို့ 
+                    // authorId ကို String အနေနဲ့ ပို့ပေးရမည်။
                     authorId: currentUserId.toString(), 
                     authorName: currentUserName || 'Admin', 
                     isAdmin: true,
@@ -323,6 +328,7 @@ function setupAdminPostLogic(isAdmin) {
                     .then(() => {
                         postInput.value = ''; 
                         
+                        // New Post တင်ပြီးရင် Feed ကို အသစ်ဆုံး Posts တွေဆီ ပြောင်းပါ
                         const newPostsTab = document.getElementById('new-posts-tab');
                         if (newPostsTab) {
                            newPostsTab.click(); 
@@ -332,9 +338,8 @@ function setupAdminPostLogic(isAdmin) {
                         showToast("Announcement posted successfully!");
                     })
                     .catch(error => {
-                        // 🚨 ERROR CATCH: Firebase Error Code ကို Console မှာ စစ်ဆေးဖို့ ပြောပါ
+                        // 🚨 ERROR CATCH: Permission Denied ဆိုရင် Rules ကို မဖြစ်မနေ စစ်ရန် ပြောပါ
                         console.error("Firebase Post Error (Check Rules): ", error);
-                        // Permission Denied ဆိုရင် စည်းမျဉ်းကို ပြန်စစ်ပါ
                         const errorMsg = error.code === 'permission-denied' 
                             ? "Permission Denied! Check Firebase Security Rules and Admin ID."
                             : `Posting FAILED! Error: ${error.code || 'Unknown'}`;
@@ -355,7 +360,7 @@ function setupAdminPostLogic(isAdmin) {
 
 
 // ===========================================
-//          MODAL & MUSIC LOGIC (CRITICAL FINAL FIX)
+//          MODAL & MUSIC LOGIC
 // ===========================================
 
 function openModal(modalId) { 
@@ -365,7 +370,7 @@ function openModal(modalId) {
     // 1. Body Scroll ကို ပိတ်ပါ
     document.body.style.overflow = 'hidden'; 
     
-    // 2. Active Class ထည့်ပါ (CSS ကနေ pointer-events: auto ဖြစ်စေမည်)
+    // 2. Active Class ထည့်ပါ 
     modal.classList.add('active');
 
     // 3. FAB ကို ဖျောက်ပါ
@@ -374,7 +379,6 @@ function openModal(modalId) {
     
     // 4. Modal Overlay ကို နှိပ်ပြီး ပိတ်နိုင်စေရန်
     modal.onclick = (e) => {
-        // Modal Overlay (modal element) ကို နှိပ်တာ သေချာမှ ပိတ်ပါ
         if (e.target === modal) { 
             closeModal(modalId);
         }
@@ -385,15 +389,15 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     
-    // 1. Active Class ကို ဖယ်ရှားပါ (CSS ကနေ pointer-events: none, opacity: 0 ဖြစ်စေမည်)
+    // 1. Active Class ကို ဖယ်ရှားပါ
     modal.classList.remove('active');
     
     // 2. Overlay Click Listener ကို ရှင်းလင်းပါ
     modal.onclick = null; 
 
-    // 3. 0.3s စောင့်ပြီးမှ (CSS Transition time) UI state များကို ပြန်စစ်ဆေးပါ
+    // 3. 0.3s စောင့်ပြီးမှ UI state များကို ပြန်စစ်ဆေးပါ
     setTimeout(() => {
-        // 🚨 CRITICAL CHECK: အခြား Modal တစ်ခုခု ပွင့်နေသေးရင် body scroll ကို မဖွင့်ပါ
+        // အခြား Modal တစ်ခုခု ပွင့်နေသေးရင် body scroll ကို မဖွင့်ပါ
         if (!document.querySelector('.modal-overlay.active')) {
              document.body.style.overflow = '';
         }
@@ -404,7 +408,7 @@ function closeModal(modalId) {
             const fab = document.getElementById('post-add-button');
             if (fab) fab.style.display = 'flex'; 
         }
-    }, 300); // CSS Transition duration (0.3s)
+    }, 300); 
 }
 
 function updateMusicStatus(isPlaying) { 
@@ -660,6 +664,7 @@ function setupTMA() {
         }
         main();
     } else {
+        // Fallback/Local Testing Mode (for development outside of Telegram)
         console.warn("Telegram WebApp SDK not found. Running in fallback mode (Local Testing).");
         
         const mockAdminId = ADMIN_CHAT_IDS.length > 0 ? ADMIN_CHAT_IDS[0] : 123456789; 

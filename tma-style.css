@@ -6,14 +6,19 @@
 /* 1. Global & Variables */
 /* -------------------------------------- */
 :root {
+    /* Telegram Theme Fallbacks/Defaults */
     --tg-theme-bg-color: #0d1117; 
     --tg-theme-secondary-bg-color: #1a202c;
     --tg-theme-text-color: #ffffff;
+    
+    /* 🎨 ACCENT COLOURS */
     --tg-theme-link-color: #20b2aa; 
     --tg-theme-button-color: #4caf50; 
     --tg-theme-button-text-color: #ffffff;
     --tg-theme-destructive-text-color: #ff9800; 
     --tg-theme-hint-color: #bdbdbd; 
+
+    /* Custom Variables */
     --border-radius-main: 12px;
     --spacing-unit: 16px;
     --fab-size: 56px;
@@ -382,7 +387,7 @@ header {
     opacity: 1;
 }
 
-/* Modal Content Styles (unchanged) */
+/* Modal Content Styles */
 
 .modal-content h3 {
     margin-bottom: 15px;

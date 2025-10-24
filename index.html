@@ -1,507 +1,163 @@
 <!DOCTYPE html>
-<html lang="my">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TMA Social Feed</title>
-    <!-- Tailwind CSS CDN for modern and responsive styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons for aesthetic UI elements -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        /* Custom styles for aesthetic enhancements and mobile layout */
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZZ Feed (Community Posts)</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <link rel="stylesheet" href="tma-style.css">
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <script>
+        // *** REPLACE THE CONFIG BELOW WITH YOUR ACTUAL FIREBASE CONFIG ***
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY", 
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID", 
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        if (typeof firebase !== 'undefined') {
+            const firebaseApp = firebase.initializeApp(firebaseConfig);
+            window.db = firebaseApp.firestore();
+            console.log("Firebase and Firestore Initialized.");
+        } else {
+            console.error("Firebase SDK not loaded correctly.");
         }
-        #app-container {
-            width: 100%;
-            max-width: 600px;
-            padding: 16px;
-        }
-        .post-card {
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s;
-        }
-        .post-card:hover {
-            transform: translateY(-2px);
-        }
-        .action-button {
-            transition: all 0.15s;
-            cursor: pointer;
-        }
-        .action-button:active {
-            transform: scale(0.95);
-        }
-        .toast {
-            z-index: 1000;
-            position: fixed;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 12px 20px;
-            background-color: #ef4444; /* Red for errors like Permission Denied */
-            color: white;
-            border-radius: 8px;
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
-            pointer-events: none;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        }
-    </style>
+    </script>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 
-    <div id="app-container" class="space-y-4">
-        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">TMA Feed</h1>
-
-        <!-- Post Creation Form (Only visible to Admins) -->
-        <div id="admin-post-form" class="hidden bg-white p-4 rounded-xl shadow-lg mb-6 border border-indigo-200">
-            <h2 class="text-xl font-semibold mb-3 text-indigo-700">အသစ်တင်ရန်</h2>
-            <textarea id="post-input" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mb-3" placeholder="ဘာတွေပြောချင်ပါသလဲ..."></textarea>
-            <button id="post-button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg transition duration-150 shadow-md">Post တင်ရန်</button>
-        </div>
-
-        <!-- Post List Container -->
-        <div id="posts-container" class="space-y-4">
-            <!-- Posts will be injected here by JavaScript -->
-        </div>
+    <div class="app-container">
         
-        <!-- Loading Indicator -->
-        <div id="loading-spinner" class="text-center p-8">
-            <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p class="text-gray-500 mt-2">Data များ ခေါ်ယူနေသည်...</p>
+        <div class="fixed-header-area">
+            <header>
+                <div class="music-info-area">
+                    <span id="current-music-status">Music Paused (Tap Icon to Play)</span>
+                    <i id="volume-toggle" class="fas fa-volume-off" title="Start Playing Music"></i>
+                </div>
+                <button id="music-button" class="icon-btn" aria-label="Music Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </header>
+            
+            <div class="filter-tabs" role="tablist">
+                <button id="new-posts-tab" class="filter-tab active" data-filter="new-posts" role="tab" aria-selected="true">
+                    🔥 New Posts
+                </button>
+                <button class="filter-tab" data-filter="old-posts" role="tab" aria-selected="false">
+                    ⏳ Oldest
+                </button>
+            </div>
+        </div>
+
+        <div class="content">
+            
+            <div id="home-screen" class="screen active">
+                <div id="posts-container" class="posts-list">
+                    <p class="initial-loading-text">Loading posts...</p>
+                </div>
+            </div>
+
+            <div id="profile-screen" class="screen">
+                <div class="profile-card">
+                    <div id="profile-avatar-placeholder" class="avatar-placeholder">U</div>
+                    <h2 id="profile-display-name">Loading...</h2>
+                    <p id="profile-display-username" class="hint-text">Username N/A</p>
+                    <span id="admin-status" class="admin-badge">Regular User</span>
+
+                    <div class="info-row">
+                        <span>Telegram Chat ID:</span>
+                        <div class="copy-area">
+                            <span id="telegram-chat-id">0</span>
+                            <button id="chat-id-copy-btn" class="icon-btn" aria-label="Copy User ID">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button id="tma-close-btn" class="close-app-btn">
+                        <i class="fas fa-times-circle"></i> Close Mini App
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-screen="home-screen" aria-label="Home Feed">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </button>
+            <button class="nav-item" data-screen="profile-screen" aria-label="Profile">
+                <i class="fas fa-user"></i>
+                <span>Profile</span>
+            </button>
+        </nav>
+        
+        <button id="post-add-button" class="fab" aria-label="Add New Post" style="display:none;">
+            <i class="fas fa-plus"></i>
+        </button>
+    </div>
+
+    <div id="post-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Create New Post</h3>
+            <textarea id="post-input" placeholder="Type your announcement (5-500 chars)" maxlength="500"></textarea>
+            <div class="modal-actions">
+                <button id="cancel-post-btn" class="modal-cancel-btn">Cancel</button>
+                <button id="submit-post-btn" class="modal-submit-btn">Post Now</button>
+            </div>
         </div>
     </div>
 
-    <!-- Toast/Notification Message Box -->
-    <div id="toast" class="toast"></div>
+    <div id="music-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Music Settings</h3>
+            <p class="hint-text">Choose your background audio source.</p>
+            <div class="music-option-list">
+                <button class="music-option" data-music-type="default">
+                    <i class="fas fa-headphones"></i> Use Default Lofi
+                </button>
+                <button class="music-option" data-music-type="url">
+                    <i class="fas fa-link"></i> Use Custom URL
+                </button>
+                <label for="music-upload-input" class="music-option">
+                    <i class="fas fa-upload"></i> Upload Local File (.mp3)
+                </label>
+                <input type="file" id="music-upload-input" accept="audio/mp3,audio/*" style="display: none;">
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-music-modal-btn" class="modal-cancel-btn full-width">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="url-input-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Custom Music URL</h3>
+            <input type="url" id="music-url-input" placeholder="Enter HTTP/HTTPS audio link">
+            <div class="modal-actions">
+                <button id="close-url-modal-btn" class="modal-cancel-btn">Back</button>
+                <button id="play-url-btn" class="modal-submit-btn">Set & Play</button>
+            </div>
+        </div>
+    </div>
 
-    <!-- Firebase SDKs (v11.6.1 is used) -->
-    <script type="module">
-        // Firebase Modular SDK Imports
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // --------------------------------------------------------
-        // FIREBASE CONFIGURATION (Hardcoded by User Request)
-        // --------------------------------------------------------
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // 🚨 ခင်ဗျားပေးပို့ထားသော Config အတိုင်း ထည့်သွင်းထားပါသည်။
-        const firebaseConfig = {
-            apiKey: "AIzaSyDpuDVZXdT6CZ6MlgRAd8bbVYtuIVevzlI",
-            authDomain: "zaroqt101.firebaseapp.com",
-            databaseURL: "https://zaroqt101-default-rtdb.firebaseio.com", 
-            projectId: "zaroqt101",
-            storageBucket: "zaroqt101.firebasestorage.app",
-            messagingSenderId: "141083314351",
-            appId: "1:141083314351:web:e7f7ce068c0c2c34a7ec5a",
-            measurementId: "G-T247G5WRPJ" 
-        };
+    <audio id="audio-player" style="display:none;"></audio>
 
-        // 🚨 Admin Chat ID များကို ဤနေရာတွင် Number အနေဖြင့် ထည့်သွင်းရပါမည်။
-        const ADMIN_CHAT_IDS = [ 
-            1924452453, // Admin 1: ခင်ဗျား၏ ID (Number)
-            6440295843, // Admin 2
-            6513916873  // Admin 3
-        ]; 
+    <div id="custom-toast" class="custom-toast"></div>
 
-        // --------------------------------------------------------
-        // FIREBASE SETUP AND INITIALIZATION
-        // --------------------------------------------------------
-        let db, auth, currentUserId = null, isAdminUser = false;
-        // Public Data Path: /artifacts/{appId}/public/data/tma_zzfeed_posts
-        const POSTS_COLLECTION = 'artifacts/' + (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id') + '/public/data/tma_zzfeed_posts';
-        // Likes Collection (also public to allow query/read access by all)
-        const LIKES_COLLECTION = 'artifacts/' + (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id') + '/public/data/tma_zzfeed_likes';
-
-
-        // Helper function for showing toasts instead of alerts
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.style.backgroundColor = message.includes("Denied") || message.includes("Error") ? '#ef4444' : '#10b981';
-            toast.style.opacity = '1';
-            setTimeout(() => {
-                toast.style.opacity = '0';
-            }, 3000);
-        }
-
-        // Helper function for displaying icons
-        function getIcon(name, classes) {
-            return `<i data-lucide="${name}" class="${classes}"></i>`;
-        }
-        
-        // Convert timestamp to a readable format (e.g., "1 hour ago")
-        function formatTimeAgo(timestamp) {
-            if (!timestamp) return 'ယခုလေးတင်';
-            const now = Date.now();
-            const seconds = Math.floor((now - timestamp) / 1000);
-            
-            let interval = seconds / 31536000;
-            if (interval > 1) return Math.floor(interval) + " နှစ်";
-            interval = seconds / 2592000;
-            if (interval > 1) return Math.floor(interval) + " လ";
-            interval = seconds / 86400;
-            if (interval > 1) return Math.floor(interval) + " ရက်";
-            interval = seconds / 3600;
-            if (interval > 1) return Math.floor(interval) + " နာရီ";
-            interval = seconds / 60;
-            if (interval > 1) return Math.floor(interval) + " မိနစ်";
-            return "ယခုလေးတင်";
-        }
-
-        // Initialize Firebase and Auth
-        async function initializeFirebase() {
-            const loadingSpinner = document.getElementById('loading-spinner');
-            
-            if (!firebaseConfig.apiKey || !firebaseConfig.authDomain) {
-                loadingSpinner.innerHTML = '<p class="text-red-500">Config: apiKey သို့မဟုတ် authDomain မတွေ့ပါ</p>';
-                return;
-            }
-            
-            try {
-                loadingSpinner.innerHTML = '<p class="text-gray-500 mt-2">1/3 App စတင်နေပါသည်...</p>';
-                // 1. Initialize App
-                const app = initializeApp(firebaseConfig);
-                
-                // 2. Get Auth and Firestore Services
-                loadingSpinner.innerHTML = '<p class="text-gray-500 mt-2">2/3 Auth Service ချိတ်ဆက်နေပါသည်...</p>';
-                auth = getAuth(app); 
-                db = getFirestore(app);
-
-                // 3. Sign In (Custom Token or Anonymous)
-                loadingSpinner.innerHTML = '<p class="text-gray-500 mt-2">3/3 အသုံးပြုသူကို အတည်ပြုနေပါသည်...</p>';
-                
-                let authSuccess = false;
-                if (initialAuthToken) {
-                    try {
-                        // Attempt A: Sign in with the environment's Custom Token
-                        await signInWithCustomToken(auth, initialAuthToken);
-                        authSuccess = true;
-                        console.log("Sign-In Successful with Custom Token.");
-                    } catch (e) {
-                        // Attempt A failed, likely due to token mismatch with hardcoded project config
-                        if (e.code === "auth/custom-token-mismatch") {
-                            console.warn("Custom Token Mismatch: Falling back to Anonymous Sign-In.", e.message);
-                        } else {
-                            console.error("Custom Token Sign-In failed with unexpected error:", e);
-                        }
-                        // Fallback logic will handle the next step
-                    }
-                }
-
-                if (!authSuccess) {
-                    // Attempt B: If custom token wasn't used or failed, sign in anonymously.
-                    await signInAnonymously(auth);
-                    authSuccess = true;
-                    console.log("Sign-In Successful with Anonymous Token.");
-                }
-
-                // 4. Wait for auth state change and start listening
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        currentUserId = user.uid;
-                        // Check if the integer version of the user's UID is in the Admin list
-                        isAdminUser = ADMIN_CHAT_IDS.includes(parseInt(currentUserId));
-                        
-                        console.log("Authenticated User ID:", currentUserId);
-                        console.log("Is Admin:", isAdminUser);
-
-                        const adminForm = document.getElementById('admin-post-form');
-                        if (adminForm) {
-                            adminForm.classList.toggle('hidden', !isAdminUser);
-                        }
-
-                        // Start listening to data
-                        listenForPosts();
-                    } else {
-                        currentUserId = null;
-                        loadingSpinner.innerHTML = '<p class="text-red-500">Firebase Authentication Failed. (User not found)</p>';
-                    }
-                });
-
-            } catch (error) {
-                console.error("Firebase Initialization Critical Error:", error);
-                
-                let errorMessage;
-                if (error.code === "auth/configuration-not-found" || error.message.includes("authDomain")) {
-                    errorMessage = `Configuration Error: Firebase Console ထဲရှိ "Authentication -> Sign-in method" တွင် Anonymous ကို ဖွင့်ပေးရန် လိုအပ်ပါသည်။`;
-                } else if (error.code === "auth/invalid-api-key") {
-                    errorMessage = `API Key Error: API Key မှားနေသည်.`;
-                } else {
-                    errorMessage = `Initialization Error: ${error.message}. (ကျေးဇူးပြု၍ Console ကို စစ်ဆေးပါ)`;
-                }
-
-                loadingSpinner.innerHTML = `<p class="text-red-500 text-center px-4 font-bold">${errorMessage}</p>`;
-            }
-        }
-
-        // --------------------------------------------------------
-        // DATA LOGIC (POSTS AND LIKES)
-        // --------------------------------------------------------
-        
-        // Main function to listen for real-time post updates
-        function listenForPosts() {
-            if (!db) return; 
-            
-            const postsRef = collection(db, POSTS_COLLECTION);
-            // We use client-side sorting to avoid Firestore index issues
-            const q = query(postsRef); 
-
-            onSnapshot(q, (snapshot) => {
-                const postsContainer = document.getElementById('posts-container');
-                postsContainer.innerHTML = ''; 
-                document.getElementById('loading-spinner').classList.add('hidden'); 
-
-                const allPosts = [];
-                snapshot.forEach(doc => {
-                    allPosts.push({ id: doc.id, ...doc.data() });
-                });
-
-                // Sort by timestamp in memory (descending)
-                allPosts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-                if (allPosts.length === 0) {
-                    postsContainer.innerHTML = '<p class="text-center text-gray-500 p-8">လက်ရှိတွင် Post များ မရှိသေးပါ</p>';
-                } else {
-                    allPosts.forEach(post => {
-                        postsContainer.appendChild(createPostElement(post));
-                    });
-                    lucide.createIcons();
-                }
-            }, (error) => {
-                console.error("Error fetching posts:", error);
-                showToast("Post များ ခေါ်ယူရာတွင် အမှားဖြစ်သည်: " + error.message);
-                document.getElementById('loading-spinner').classList.add('hidden');
-            });
-            
-            listenForLikes();
-        }
-
-        // Store likes data globally for quick lookup
-        let likesData = {}; // Format: { postId: { count: N, likedBy: [userId1, userId2, ...] } }
-
-        function listenForLikes() {
-            if (!db) return;
-            
-            const likesRef = collection(db, LIKES_COLLECTION);
-            onSnapshot(likesRef, (snapshot) => {
-                const newLikesData = {};
-                
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    const postId = data.postId;
-                    const userId = data.userId;
-                    
-                    if (!newLikesData[postId]) {
-                        newLikesData[postId] = { count: 0, likedBy: [] };
-                    }
-                    newLikesData[postId].count += 1;
-                    newLikesData[postId].likedBy.push(userId);
-                });
-                
-                likesData = newLikesData;
-                updateAllPostsUI();
-            }, (error) => {
-                console.error("Error fetching likes:", error);
-                showToast("Like Data များ ခေါ်ယူရာတွင် အမှားဖြစ်သည်: " + error.message);
-            });
-        }
-        
-        // Function to re-render like counts and status on existing posts
-        function updateAllPostsUI() {
-            document.querySelectorAll('.post-card').forEach(card => {
-                const postId = card.dataset.postId;
-                const likeInfo = likesData[postId] || { count: 0, likedBy: [] };
-                
-                const likeCountEl = card.querySelector('.like-count');
-                const likeButtonEl = card.querySelector('.like-button');
-                
-                if (likeCountEl) {
-                    likeCountEl.textContent = likeInfo.count;
-                }
-                
-                if (likeButtonEl) {
-                    const isLiked = likeInfo.likedBy.includes(currentUserId);
-                    likeButtonEl.innerHTML = getIcon(isLiked ? 'heart' : 'heart', isLiked ? 'w-5 h-5 fill-red-500 text-red-500' : 'w-5 h-5 text-gray-400');
-                    likeButtonEl.classList.toggle('text-red-500', isLiked);
-                }
-            });
-        }
-        
-        // Create the HTML element for a single post
-        function createPostElement(post) {
-            const likeInfo = likesData[post.id] || { count: 0, likedBy: [] };
-            const isLiked = likeInfo.likedBy.includes(currentUserId);
-            
-            const postDiv = document.createElement('div');
-            postDiv.className = 'post-card bg-white p-5 rounded-xl border border-gray-200';
-            postDiv.dataset.postId = post.id;
-            
-            const formattedTime = formatTimeAgo(post.timestamp);
-            
-            const isPostAuthorAdmin = ADMIN_CHAT_IDS.includes(parseInt(post.authorId));
-            const authorText = isPostAuthorAdmin ? 
-                `<span class="text-indigo-600 font-semibold flex items-center">${getIcon('star', 'w-4 h-4 mr-1 fill-yellow-400 text-yellow-400')} Admin</span>` : 
-                `<span class="text-gray-500">User ${currentUserId ? post.authorId.substring(0, 5) : 'XXXXX'}...</span>`;
-
-            postDiv.innerHTML = `
-                <div class="flex justify-between items-start mb-3">
-                    <div class="flex items-center space-x-2">
-                        <!-- Avatar Placeholder -->
-                        <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-lg">
-                            ${post.id.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                            ${authorText}
-                            <p class="text-xs text-gray-400">${formattedTime} က</p>
-                        </div>
-                    </div>
-                    ${isAdminUser ? `<button class="delete-button text-sm text-red-500 hover:text-red-700 p-1 rounded transition duration-150 action-button" data-id="${post.id}">${getIcon('trash-2', 'w-4 h-4')}</button>` : ''}
-                </div>
-                <p class="text-gray-800 mb-4 whitespace-pre-wrap">${post.content}</p>
-                
-                <!-- Action Bar -->
-                <div class="flex items-center space-x-6 border-t pt-3 mt-3">
-                    <!-- Like Button -->
-                    <button class="like-button flex items-center space-x-1 text-gray-600 hover:text-red-500 action-button" data-id="${post.id}">
-                        ${getIcon(isLiked ? 'heart' : 'heart', isLiked ? 'w-5 h-5 fill-red-500 text-red-500' : 'w-5 h-5 text-gray-400')}
-                        <span class="like-count font-medium text-sm">${likeInfo.count}</span>
-                    </button>
-                    <!-- User ID Display (MANDATORY for multi-user apps) -->
-                    <p class="text-xs text-gray-400">Your ID: ${currentUserId || 'Authenticating...'}</p>
-                </div>
-            `;
-            
-            // Attach event listeners
-            postDiv.querySelector('.like-button')?.addEventListener('click', () => toggleLike(post.id, isLiked));
-            postDiv.querySelector('.delete-button')?.addEventListener('click', () => deletePost(post.id));
-
-            return postDiv;
-        }
-
-        // --------------------------------------------------------
-        // ACTIONS: POST, LIKE, DELETE
-        // --------------------------------------------------------
-
-        // Handle new post submission
-        async function createPost() {
-            const postInput = document.getElementById('post-input');
-            const content = postInput.value.trim();
-            const postButton = document.getElementById('post-button');
-
-            if (!content) {
-                showToast("Post အကြောင်းအရာကို ဖြည့်ပေးပါ");
-                return;
-            }
-            if (!currentUserId || !isAdminUser) {
-                showToast("Admin Permission မရှိပါ၊ Post တင်၍မရပါ");
-                return;
-            }
-            
-            postButton.disabled = true;
-            postButton.textContent = "တင်နေသည်...";
-
-            const newPost = {
-                content: content,
-                authorId: currentUserId.toString(),
-                timestamp: Date.now()
-            };
-
-            try {
-                // Using public collection path
-                await addDoc(collection(db, POSTS_COLLECTION), newPost);
-                showToast("Post တင်ခြင်း အောင်မြင်သည်!");
-                postInput.value = '';
-            } catch (error) {
-                console.error("Post တင်ရာတွင် အမှားဖြစ်သည်:", error);
-                showToast(`Permission Denied! Check Firebase Security Rules and Admin ID.`);
-            } finally {
-                postButton.disabled = false;
-                postButton.textContent = "Post တင်ရန်";
-            }
-        }
-        
-        // Handle like/unlike action
-        async function toggleLike(postId, isLiked) {
-            if (!currentUserId) {
-                showToast("Like လုပ်ရန် Log In ဝင်ထားဖို့ လိုပါတယ်");
-                return;
-            }
-            
-            const likeDocId = `${postId}_${currentUserId}`;
-            const likeDocRef = doc(db, LIKES_COLLECTION, likeDocId);
-            
-            try {
-                if (isLiked) {
-                    await deleteDoc(likeDocRef);
-                } else {
-                    await setDoc(likeDocRef, { 
-                        postId: postId, 
-                        userId: currentUserId,
-                        timestamp: Date.now()
-                    });
-                }
-            } catch (error) {
-                console.error("Like Action Error:", error);
-                showToast("Like လုပ်ရာတွင် အမှားဖြစ်သည်: " + error.message);
-            }
-        }
-
-        // Handle post deletion
-        async function deletePost(postId) {
-            if (!isAdminUser) {
-                showToast("Admin သာလျှင် Post ဖျက်ခွင့်ရှိသည်");
-                return;
-            }
-            
-            // NOTE: window.confirm() is forbidden. In a production app, this should be replaced by a custom modal UI.
-            // For immediate debugging, we will proceed directly with deletion logic.
-            
-            const postDocRef = doc(db, POSTS_COLLECTION, postId);
-            const batch = writeBatch(db);
-            
-            try {
-                batch.delete(postDocRef);
-
-                // Deleting associated likes
-                const q = query(collection(db, LIKES_COLLECTION), where("postId", "==", postId));
-                const querySnapshot = await getDocs(q);
-                
-                querySnapshot.forEach((doc) => {
-                    batch.delete(doc.ref);
-                });
-
-                await batch.commit();
-                showToast("Post ဖျက်ခြင်း အောင်မြင်သည်!");
-            } catch (error) {
-                console.error("Delete Action Error:", error);
-                showToast("Post ဖျက်ရာတွင် အမှားဖြစ်သည်: " + error.message);
-            }
-        }
-
-        // --------------------------------------------------------
-        // EVENT LISTENERS AND STARTUP
-        // --------------------------------------------------------
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeFirebase();
-            document.getElementById('post-button')?.addEventListener('click', createPost);
-        });
-
-    </script>
+    <script src="tma-script.js"></script>
 </body>
 </html>
 
+ဒီ code ကိုပြန်လုပ်ပေး JS css ရောပဲ

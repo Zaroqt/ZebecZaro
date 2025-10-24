@@ -1,54 +1,78 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="my"> <!-- Burmese Language -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ZZ Feed (Community Posts)</title>
     
+    <!-- Font Awesome (Icons) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="tma-style.css">
 
+    <!-- 🛑 FIREBASE SDKS (Database အတွက် မဖြစ်မနေလိုအပ်သည်) 🛑 -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     
+    <!-- 3. သင့်ရဲ့ Firebase Config ကို အောက်မှာ ထည့်ရပါမယ်။ -->
     <script>
         // *** REPLACE THE CONFIG BELOW WITH YOUR ACTUAL FIREBASE CONFIG ***
         const firebaseConfig = {
-            apiKey: "AIzaSyDpuDVZXdT6CZ6MlgRAd8bbVYtuIVevzlI", // သင်၏ API Key
+            apiKey: "AIzaSyDpuDVZXdT6CZ6MlgRAd8bbVYtuIVevzlI", // 🚨 သင့် Key ဖြင့် အစားထိုးပါ
             authDomain: "zaroqt101.firebaseapp.com",
-            projectId: "zaroqt101", // သင်၏ Project ID
+            databaseURL: "https://zaroqt101-default-rtdb.firebaseio.com", // 🚨 Realtime DB URL (Firestore သုံးသော်လည်း ထည့်ထားပါ)
+            projectId: "zaroqt101", // 🚨 သင့် Project ID
             storageBucket: "zaroqt101.firebasestorage.app",
             messagingSenderId: "141083314351",
-            appId: "1:141083314351:web:e7f7ce068c0c2c34a7ec5a"
+            appId: "1:141083314351:web:e7f7ce068c0c2c34a7ec5a",
+            measurementId: "G-T247G5WRPJ" // Optional
+        };
 
         // Initialize Firebase
-        if (typeof firebase !== 'undefined') {
-            const firebaseApp = firebase.initializeApp(firebaseConfig);
-            window.db = firebaseApp.firestore();
-            console.log("Firebase and Firestore Initialized.");
+        if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== "YOUR_API_KEY") {
+            try {
+                const firebaseApp = firebase.initializeApp(firebaseConfig);
+                window.db = firebaseApp.firestore();
+                console.log("Firebase and Firestore Initialized.");
+            } catch (e) {
+                console.error("Firebase Initialization Error:", e);
+                // Display error to user if initialization fails
+                document.addEventListener('DOMContentLoaded', () => {
+                     const loadingEl = document.getElementById('initial-loading-text') || document.body;
+                     loadingEl.innerHTML = `<p style="color:red; text-align:center; padding: 20px;">❌ Firebase Init Error: ${e.message}. Check Config in index.html.</p>`;
+                });
+            }
         } else {
-            console.error("Firebase SDK not loaded correctly.");
+            console.error("Firebase SDK not loaded or Config is missing/incorrect.");
+             document.addEventListener('DOMContentLoaded', () => {
+                 const loadingEl = document.getElementById('initial-loading-text') || document.body;
+                 loadingEl.innerHTML = `<p style="color:red; text-align:center; padding: 20px;">❌ Firebase SDK load failed or Config missing.</p>`;
+            });
         }
     </script>
     
+    <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 
+    <!-- 🚀 MAIN APP CONTAINER -->
     <div class="app-container">
         
+        <!-- FIXED HEADER AREA -->
         <div class="fixed-header-area">
             <header>
                 <div class="music-info-area">
-                    <span id="current-music-status">Music Paused (Tap Icon to Play)</span>
-                    <i id="volume-toggle" class="fas fa-volume-off" title="Start Playing Music"></i>
+                    <span id="current-music-status">Music Paused</span>
+                    <i id="volume-toggle" class="fas fa-volume-off" title="Toggle Music"></i>
                 </div>
                 <button id="music-button" class="icon-btn" aria-label="Music Settings">
                     <i class="fas fa-cog"></i>
                 </button>
             </header>
             
+            <!-- POST FILTER TABS -->
             <div class="filter-tabs" role="tablist">
                 <button id="new-posts-tab" class="filter-tab active" data-filter="new-posts" role="tab" aria-selected="true">
                     🔥 New Posts
@@ -59,14 +83,18 @@
             </div>
         </div>
 
+        <!-- CONTENT AREA -->
         <div class="content">
             
+            <!-- HOME SCREEN (Post Feed) -->
             <div id="home-screen" class="screen active">
                 <div id="posts-container" class="posts-list">
-                    <p class="initial-loading-text">Loading posts...</p>
+                    <!-- Posts will be injected here by JS -->
+                    <p id="initial-loading-text" class="initial-loading-text">Loading posts...</p>
                 </div>
             </div>
 
+            <!-- PROFILE SCREEN -->
             <div id="profile-screen" class="screen">
                 <div class="profile-card">
                     <div id="profile-avatar-placeholder" class="avatar-placeholder">U</div>
@@ -91,6 +119,7 @@
             </div>
         </div>
 
+        <!-- BOTTOM NAVIGATION -->
         <nav class="bottom-nav">
             <button class="nav-item active" data-screen="home-screen" aria-label="Home Feed">
                 <i class="fas fa-home"></i>
@@ -102,11 +131,15 @@
             </button>
         </nav>
         
+        <!-- FAB (ADMIN POST BUTTON) -->
         <button id="post-add-button" class="fab" aria-label="Add New Post" style="display:none;">
             <i class="fas fa-plus"></i>
         </button>
     </div>
 
+    <!-- 🚨 MODALS (Hidden by default using CSS) 🚨 -->
+
+    <!-- Post Modal (Admin Only) -->
     <div id="post-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Create New Post</h3>
@@ -118,6 +151,7 @@
         </div>
     </div>
 
+    <!-- Music Modal -->
     <div id="music-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Music Settings</h3>
@@ -140,6 +174,7 @@
         </div>
     </div>
     
+    <!-- Music URL Input Modal -->
     <div id="url-input-modal" class="modal-overlay">
         <div class="modal-content">
             <h3>Custom Music URL</h3>
@@ -151,10 +186,15 @@
         </div>
     </div>
 
+    <!-- HTML5 Audio Player (Hidden) -->
     <audio id="audio-player" style="display:none;"></audio>
 
+    <!-- TOAST NOTIFICATION -->
     <div id="custom-toast" class="custom-toast"></div>
 
+    <!-- Custom JavaScript -->
     <script src="tma-script.js"></script>
 </body>
 </html>
+
+

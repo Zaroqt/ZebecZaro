@@ -91,27 +91,26 @@
         // Firebase Modular SDK Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, where, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --------------------------------------------------------
         // FIREBASE CONFIGURATION (Hardcoded by User Request)
         // --------------------------------------------------------
-        // Auth Token ကို Canvas Environment ကနေ အလိုအလျောက် ယူသုံးသည်
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
-        // 🚨 Config များကို ဤနေရာတွင် Hardcode ထည့်သွင်းထားသည် 🚨
+        // 🚨 ခင်ဗျားပေးပို့ထားသော Config အတိုင်း ထည့်သွင်းထားပါသည်။
         const firebaseConfig = {
             apiKey: "AIzaSyDpuDVZXdT6CZ6MlgRAd8bbVYtuIVevzlI",
             authDomain: "zaroqt101.firebaseapp.com",
+            databaseURL: "https://zaroqt101-default-rtdb.firebaseio.com", 
             projectId: "zaroqt101",
             storageBucket: "zaroqt101.firebasestorage.app",
             messagingSenderId: "141083314351",
-            appId: "1:141083314351:web:e7f7ce068c0c2c34a7ec5a"
+            appId: "1:141083314351:web:e7f7ce068c0c2c34a7ec5a",
+            measurementId: "G-T247G5WRPJ" 
         };
 
-        // 🚨 ဤနေရာတွင် ခင်ဗျား၏ Admin ID များကို Number အနေဖြင့် ထည့်သွင်းရပါမည်။
-        // Firebase Rules နှင့် ကိုက်ညီစေရန် အရေးကြီးသည်
+        // 🚨 Admin Chat ID များကို ဤနေရာတွင် Number အနေဖြင့် ထည့်သွင်းရပါမည်။
         const ADMIN_CHAT_IDS = [ 
             1924452453, // Admin 1: ခင်ဗျား၏ ID (Number)
             6440295843, // Admin 2
@@ -122,14 +121,17 @@
         // FIREBASE SETUP AND INITIALIZATION
         // --------------------------------------------------------
         let db, auth, currentUserId = null, isAdminUser = false;
-        const POSTS_COLLECTION = 'tma_zzfeed_posts';
-        const LIKES_COLLECTION = 'tma_zzfeed_likes';
+        // Public Data Path: /artifacts/{appId}/public/data/tma_zzfeed_posts
+        const POSTS_COLLECTION = 'artifacts/' + (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id') + '/public/data/tma_zzfeed_posts';
+        // Likes Collection (also public to allow query/read access by all)
+        const LIKES_COLLECTION = 'artifacts/' + (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id') + '/public/data/tma_zzfeed_likes';
+
 
         // Helper function for showing toasts instead of alerts
         function showToast(message) {
             const toast = document.getElementById('toast');
             toast.textContent = message;
-            toast.style.backgroundColor = message.includes("Denied") ? '#ef4444' : '#10b981';
+            toast.style.backgroundColor = message.includes("Denied") || message.includes("Error") ? '#ef4444' : '#10b981';
             toast.style.opacity = '1';
             setTimeout(() => {
                 toast.style.opacity = '0';
@@ -162,54 +164,87 @@
 
         // Initialize Firebase and Auth
         async function initializeFirebase() {
-            if (!firebaseConfig.apiKey) {
-                console.error("Firebase Config Not Found.");
-                document.getElementById('loading-spinner').innerHTML = '<p class="text-red-500">Firebase Config ကို မှန်ကန်စွာ ထည့်သွင်းပါ။</p>';
+            const loadingSpinner = document.getElementById('loading-spinner');
+            
+            if (!firebaseConfig.apiKey || !firebaseConfig.authDomain) {
+                loadingSpinner.innerHTML = '<p class="text-red-500">Config: apiKey သို့မဟုတ် authDomain မတွေ့ပါ</p>';
                 return;
             }
-
+            
             try {
-                // setLogLevel('debug'); // Enable for debugging Firestore rules/requests
+                loadingSpinner.innerHTML = '<p class="text-gray-500 mt-2">1/3 App စတင်နေပါသည်...</p>';
+                // 1. Initialize App
                 const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
+                
+                // 2. Get Auth and Firestore Services
+                loadingSpinner.innerHTML = '<p class="text-gray-500 mt-2">2/3 Auth Service ချိတ်ဆက်နေပါသည်...</p>';
+                auth = getAuth(app); 
                 db = getFirestore(app);
 
-                // Sign in using Custom Token or Anonymously
+                // 3. Sign In (Custom Token or Anonymous)
+                loadingSpinner.innerHTML = '<p class="text-gray-500 mt-2">3/3 အသုံးပြုသူကို အတည်ပြုနေပါသည်...</p>';
+                
+                let authSuccess = false;
                 if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
+                    try {
+                        // Attempt A: Sign in with the environment's Custom Token
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        authSuccess = true;
+                        console.log("Sign-In Successful with Custom Token.");
+                    } catch (e) {
+                        // Attempt A failed, likely due to token mismatch with hardcoded project config
+                        if (e.code === "auth/custom-token-mismatch") {
+                            console.warn("Custom Token Mismatch: Falling back to Anonymous Sign-In.", e.message);
+                        } else {
+                            console.error("Custom Token Sign-In failed with unexpected error:", e);
+                        }
+                        // Fallback logic will handle the next step
+                    }
                 }
 
-                // Wait for auth state change to confirm user ID
+                if (!authSuccess) {
+                    // Attempt B: If custom token wasn't used or failed, sign in anonymously.
+                    await signInAnonymously(auth);
+                    authSuccess = true;
+                    console.log("Sign-In Successful with Anonymous Token.");
+                }
+
+                // 4. Wait for auth state change and start listening
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         currentUserId = user.uid;
-                        // Check if the current user ID (string) is one of the Admin IDs (Number)
-                        // JS stores IDs as strings, but ADMIN_CHAT_IDS are set as numbers for clarity in the array
+                        // Check if the integer version of the user's UID is in the Admin list
                         isAdminUser = ADMIN_CHAT_IDS.includes(parseInt(currentUserId));
                         
                         console.log("Authenticated User ID:", currentUserId);
                         console.log("Is Admin:", isAdminUser);
 
-                        // Show/Hide Admin Form based on permission
                         const adminForm = document.getElementById('admin-post-form');
                         if (adminForm) {
                             adminForm.classList.toggle('hidden', !isAdminUser);
                         }
 
-                        // Start listening to data only after authentication is complete
+                        // Start listening to data
                         listenForPosts();
                     } else {
-                        // Handle sign-out or initial state
                         currentUserId = null;
-                        document.getElementById('loading-spinner').innerHTML = '<p class="text-red-500">Firebase Authentication Failed.</p>';
+                        loadingSpinner.innerHTML = '<p class="text-red-500">Firebase Authentication Failed. (User not found)</p>';
                     }
                 });
 
             } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                document.getElementById('loading-spinner').innerHTML = `<p class="text-red-500">Initialization Error: ${error.message}</p>`;
+                console.error("Firebase Initialization Critical Error:", error);
+                
+                let errorMessage;
+                if (error.code === "auth/configuration-not-found" || error.message.includes("authDomain")) {
+                    errorMessage = `Configuration Error: Firebase Console ထဲရှိ "Authentication -> Sign-in method" တွင် Anonymous ကို ဖွင့်ပေးရန် လိုအပ်ပါသည်။`;
+                } else if (error.code === "auth/invalid-api-key") {
+                    errorMessage = `API Key Error: API Key မှားနေသည်.`;
+                } else {
+                    errorMessage = `Initialization Error: ${error.message}. (ကျေးဇူးပြု၍ Console ကို စစ်ဆေးပါ)`;
+                }
+
+                loadingSpinner.innerHTML = `<p class="text-red-500 text-center px-4 font-bold">${errorMessage}</p>`;
             }
         }
 
@@ -219,16 +254,16 @@
         
         // Main function to listen for real-time post updates
         function listenForPosts() {
-            if (!db) return; // Ensure DB is initialized
+            if (!db) return; 
             
             const postsRef = collection(db, POSTS_COLLECTION);
-            // Sort by timestamp descending. We will sort in memory to avoid index issues.
+            // We use client-side sorting to avoid Firestore index issues
             const q = query(postsRef); 
 
             onSnapshot(q, (snapshot) => {
                 const postsContainer = document.getElementById('posts-container');
-                postsContainer.innerHTML = ''; // Clear previous content
-                document.getElementById('loading-spinner').classList.add('hidden'); // Hide loading
+                postsContainer.innerHTML = ''; 
+                document.getElementById('loading-spinner').classList.add('hidden'); 
 
                 const allPosts = [];
                 snapshot.forEach(doc => {
@@ -244,7 +279,6 @@
                     allPosts.forEach(post => {
                         postsContainer.appendChild(createPostElement(post));
                     });
-                    // Refresh Lucide icons after rendering new content
                     lucide.createIcons();
                 }
             }, (error) => {
@@ -253,7 +287,6 @@
                 document.getElementById('loading-spinner').classList.add('hidden');
             });
             
-            // Start listening for likes concurrently
             listenForLikes();
         }
 
@@ -264,7 +297,6 @@
             if (!db) return;
             
             const likesRef = collection(db, LIKES_COLLECTION);
-            // Listen for all changes in the likes collection
             onSnapshot(likesRef, (snapshot) => {
                 const newLikesData = {};
                 
@@ -281,7 +313,6 @@
                 });
                 
                 likesData = newLikesData;
-                // Update all post elements after receiving new like data
                 updateAllPostsUI();
             }, (error) => {
                 console.error("Error fetching likes:", error);
@@ -321,11 +352,10 @@
             
             const formattedTime = formatTimeAgo(post.timestamp);
             
-            // Check if the authorId matches any of the admin IDs (for display purposes)
             const isPostAuthorAdmin = ADMIN_CHAT_IDS.includes(parseInt(post.authorId));
             const authorText = isPostAuthorAdmin ? 
                 `<span class="text-indigo-600 font-semibold flex items-center">${getIcon('star', 'w-4 h-4 mr-1 fill-yellow-400 text-yellow-400')} Admin</span>` : 
-                `<span class="text-gray-500">User ${post.authorId.substring(0, 5)}...</span>`;
+                `<span class="text-gray-500">User ${currentUserId ? post.authorId.substring(0, 5) : 'XXXXX'}...</span>`;
 
             postDiv.innerHTML = `
                 <div class="flex justify-between items-start mb-3">
@@ -351,7 +381,7 @@
                         <span class="like-count font-medium text-sm">${likeInfo.count}</span>
                     </button>
                     <!-- User ID Display (MANDATORY for multi-user apps) -->
-                    <p class="text-xs text-gray-400">Your ID: ${currentUserId}</p>
+                    <p class="text-xs text-gray-400">Your ID: ${currentUserId || 'Authenticating...'}</p>
                 </div>
             `;
             
@@ -386,17 +416,17 @@
 
             const newPost = {
                 content: content,
-                authorId: currentUserId.toString(), // 🚨 Firebase Rule စစ်ဆေးရန် String အနေနဲ့ ပို့သည်
-                timestamp: Date.now() // Use client timestamp for initial sorting/display
+                authorId: currentUserId.toString(),
+                timestamp: Date.now()
             };
 
             try {
+                // Using public collection path
                 await addDoc(collection(db, POSTS_COLLECTION), newPost);
                 showToast("Post တင်ခြင်း အောင်မြင်သည်!");
                 postInput.value = '';
             } catch (error) {
                 console.error("Post တင်ရာတွင် အမှားဖြစ်သည်:", error);
-                // 🚨 ဤနေရာတွင် PERMISSION DENIED error ကို ဖမ်းမိပါက
                 showToast(`Permission Denied! Check Firebase Security Rules and Admin ID.`);
             } finally {
                 postButton.disabled = false;
@@ -411,14 +441,13 @@
                 return;
             }
             
-            const likeDocRef = doc(db, LIKES_COLLECTION, `${postId}_${currentUserId}`);
+            const likeDocId = `${postId}_${currentUserId}`;
+            const likeDocRef = doc(db, LIKES_COLLECTION, likeDocId);
             
             try {
                 if (isLiked) {
-                    // Unlike: Delete the like document
                     await deleteDoc(likeDocRef);
                 } else {
-                    // Like: Create a new like document
                     await setDoc(likeDocRef, { 
                         postId: postId, 
                         userId: currentUserId,
@@ -438,29 +467,28 @@
                 return;
             }
             
-            // NOTE: Using a custom modal is required, but using standard confirm() for now
-            if (confirm("ဒီ Post ကို ဖျက်ဖို့ သေချာပါသလား?")) { 
-                const postDocRef = doc(db, POSTS_COLLECTION, postId);
-                const batch = writeBatch(db);
+            // NOTE: window.confirm() is forbidden. In a production app, this should be replaced by a custom modal UI.
+            // For immediate debugging, we will proceed directly with deletion logic.
+            
+            const postDocRef = doc(db, POSTS_COLLECTION, postId);
+            const batch = writeBatch(db);
+            
+            try {
+                batch.delete(postDocRef);
+
+                // Deleting associated likes
+                const q = query(collection(db, LIKES_COLLECTION), where("postId", "==", postId));
+                const querySnapshot = await getDocs(q);
                 
-                try {
-                    // 1. Delete the post itself
-                    batch.delete(postDocRef);
+                querySnapshot.forEach((doc) => {
+                    batch.delete(doc.ref);
+                });
 
-                    // 2. Find and delete all associated likes
-                    const q = query(collection(db, LIKES_COLLECTION), where("postId", "==", postId));
-                    const querySnapshot = await getDocs(q);
-                    
-                    querySnapshot.forEach((doc) => {
-                        batch.delete(doc.ref);
-                    });
-
-                    await batch.commit();
-                    showToast("Post ဖျက်ခြင်း အောင်မြင်သည်!");
-                } catch (error) {
-                    console.error("Delete Action Error:", error);
-                    showToast("Post ဖျက်ရာတွင် အမှားဖြစ်သည်: " + error.message);
-                }
+                await batch.commit();
+                showToast("Post ဖျက်ခြင်း အောင်မြင်သည်!");
+            } catch (error) {
+                console.error("Delete Action Error:", error);
+                showToast("Post ဖျက်ရာတွင် အမှားဖြစ်သည်: " + error.message);
             }
         }
 

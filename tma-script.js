@@ -6,7 +6,7 @@
 // 🚨 NOTE: These are NUMBERS (for JS logic to check isAdminUser)
 // Firebase Security Rules တွင်လည်း ဤ ID များကို String အနေဖြင့် ထည့်သွင်းထားရပါမည်။
 const ADMIN_CHAT_IDS = [ 
-    1924452453, // 🚨 သင့်ရဲ့ Admin ID (Number)
+    1924452453, // 🚨 သင့်ရဲ့ Admin ID (Number) ကို ဤနေရာတွင် ထည့်ပါ
     6440295843, 
     6513916873, 
     // Add additional Admin IDs here:
@@ -302,6 +302,7 @@ function setupAdminPostLogic(isAdmin) {
                     showToast("Error: Database not initialized. Check Firebase config.");
                     return;
                 }
+                // 🚨 Client-side check (Admin Number)
                 if (!isAdminUser(currentUserId)) {
                      showToast("Error: Authorization failed. You are not Admin. Check ADMIN_CHAT_IDS.");
                      return;

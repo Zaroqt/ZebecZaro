@@ -91,20 +91,29 @@
         // Firebase Modular SDK Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, where, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, where, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --------------------------------------------------------
-        // GLOBAL VARIABLES (provided by Canvas/TMA Environment)
+        // FIREBASE CONFIGURATION (Hardcoded by User Request)
         // --------------------------------------------------------
-        // 🚨 IMPORTANT: You MUST replace the placeholder config with your actual Firebase config
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tma-feed-default-app';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        // Auth Token ကို Canvas Environment ကနေ အလိုအလျောက် ယူသုံးသည်
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // 🚨 Config များကို ဤနေရာတွင် Hardcode ထည့်သွင်းထားသည် 🚨
+        const firebaseConfig = {
+            apiKey: "AIzaSyDpuDVZXdT6CZ6MlgRAd8bbVYtuIVevzlI",
+            authDomain: "zaroqt101.firebaseapp.com",
+            projectId: "zaroqt101",
+            storageBucket: "zaroqt101.firebasestorage.app",
+            messagingSenderId: "141083314351",
+            appId: "1:141083314351:web:e7f7ce068c0c2c34a7ec5a"
+        };
 
         // 🚨 ဤနေရာတွင် ခင်ဗျား၏ Admin ID များကို Number အနေဖြင့် ထည့်သွင်းရပါမည်။
+        // Firebase Rules နှင့် ကိုက်ညီစေရန် အရေးကြီးသည်
         const ADMIN_CHAT_IDS = [ 
-            1924452453, // Admin 1: ခင်ဗျား၏ ID
+            1924452453, // Admin 1: ခင်ဗျား၏ ID (Number)
             6440295843, // Admin 2
             6513916873  // Admin 3
         ]; 
@@ -153,7 +162,7 @@
 
         // Initialize Firebase and Auth
         async function initializeFirebase() {
-            if (!Object.keys(firebaseConfig).length) {
+            if (!firebaseConfig.apiKey) {
                 console.error("Firebase Config Not Found.");
                 document.getElementById('loading-spinner').innerHTML = '<p class="text-red-500">Firebase Config ကို မှန်ကန်စွာ ထည့်သွင်းပါ။</p>';
                 return;
@@ -429,7 +438,8 @@
                 return;
             }
             
-            if (confirm("ဒီ Post ကို ဖျက်ဖို့ သေချာပါသလား?")) {
+            // NOTE: Using a custom modal is required, but using standard confirm() for now
+            if (confirm("ဒီ Post ကို ဖျက်ဖို့ သေချာပါသလား?")) { 
                 const postDocRef = doc(db, POSTS_COLLECTION, postId);
                 const batch = writeBatch(db);
                 

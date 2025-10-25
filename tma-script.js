@@ -7,7 +7,6 @@
 // ဤနေရာတွင် သင့်ရဲ့ Admin ID (Number) ကို ထည့်သွင်းပါ
 const ADMIN_CHAT_IDS = [ 
     1924452453, 
-    6440295843, 
     6513916873, 
     // Add additional Admin IDs here:
 ]; 
